@@ -111,6 +111,7 @@ async function bootRoom(roomId) {
   let dc = null;
   let remoteDescSet = false;
   const pendingCandidates = [];
+  let offerInFlight = false;
 
   const keyParam = new URLSearchParams(location.hash.slice(1)).get("k");
   const cryptoKey = keyParam ? await importAesKey(b64urlDecode(keyParam)) : null;
@@ -124,8 +125,21 @@ async function bootRoom(roomId) {
     if (ev.candidate) sendWS(ws, { type: "candidate", candidate: ev.candidate });
   };
 
+  pc.oniceconnectionstatechange = () => {
+    console.info("[rtc] iceConnectionState:", pc.iceConnectionState);
+  };
+
+  pc.onicegatheringstatechange = () => {
+    console.info("[rtc] iceGatheringState:", pc.iceGatheringState);
+  };
+
+  pc.onsignalingstatechange = () => {
+    console.info("[rtc] signalingState:", pc.signalingState);
+  };
+
   pc.onconnectionstatechange = () => {
     const s = pc.connectionState;
+    console.info("[rtc] connectionState:", s);
     if (s === "connected") setStatus("P2P接続完了");
     else if (s === "failed") setStatus("P2P接続失敗（ネットワーク条件の可能性）");
     else if (s === "connecting") setStatus("P2P接続中...");
@@ -137,9 +151,26 @@ async function bootRoom(roomId) {
     wireDataChannel(dc);
   };
 
+  async function ensureOffer() {
+    if (role !== "offerer") return;
+    if (peers < 2) return;
+    if (offerInFlight) return;
+    if (pc.signalingState !== "stable") return;
+    if (pc.localDescription) return;
+    offerInFlight = true;
+    try {
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      sendWS(ws, { type: "offer", sdp: pc.localDescription });
+    } finally {
+      offerInFlight = false;
+    }
+  }
+
   ws.onmessage = async (ev) => {
     const msg = safeJson(ev.data);
     if (!msg) return;
+    console.info("[ws] message:", msg.type);
 
     if (msg.type === "role") {
       role = msg.role;
@@ -164,6 +195,7 @@ async function bootRoom(roomId) {
       peersLabel.textContent = String(peers);
       if (peers < 2) setStatus("相手の参加待ち...");
       else if (pc.connectionState !== "connected") setStatus("P2P確立中...");
+      ensureOffer();
       if (role === "offerer") {
         sendBtn.disabled = !(selectedFile && dc && dc.readyState === "open" && peers >= 2);
       }
@@ -201,15 +233,23 @@ async function bootRoom(roomId) {
   };
 
   ws.onclose = () => setStatus("シグナリング切断");
+  ws.onerror = () => console.warn("[ws] error");
 
   function wireDataChannel(ch) {
     ch.binaryType = "arraybuffer";
     ch.onopen = () => {
+      console.info("[rtc] datachannel open");
       setStatus("データチャネル準備完了");
       if (role === "offerer") sendBtn.disabled = !selectedFile || peers < 2;
     };
-    ch.onclose = () => setStatus("データチャネル切断");
-    ch.onerror = () => setStatus("データチャネルエラー");
+    ch.onclose = () => {
+      console.info("[rtc] datachannel close");
+      setStatus("データチャネル切断");
+    };
+    ch.onerror = () => {
+      console.warn("[rtc] datachannel error");
+      setStatus("データチャネルエラー");
+    };
 
     ch.onmessage = async (ev) => {
       if (typeof ev.data === "string") {
@@ -299,7 +339,6 @@ async function bootRoom(roomId) {
     setStatus("送信中...");
     setSendProgress(0, file.size);
 
-    const reader = file.stream().getReader();
     let sent = 0;
 
     dc.bufferedAmountLowThreshold = 4 * 1024 * 1024;
@@ -312,19 +351,25 @@ async function bootRoom(roomId) {
         };
       });
 
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
+    const sendChunk = async (value) => {
       const chunk = value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength);
-
       let payload = chunk;
       if (encrypted) payload = await encryptChunk(chunk, cryptoKey);
-
       dc.send(payload);
       sent += value.byteLength;
       setSendProgress(sent, file.size);
-
       if (dc.bufferedAmount > 8 * 1024 * 1024) await waitDrain();
+    };
+
+    const chunkSize = 16 * 1024;
+    let offset = 0;
+    while (offset < file.size) {
+      const slice = file.slice(offset, offset + chunkSize);
+      const buf = await slice.arrayBuffer();
+      const value = new Uint8Array(buf);
+      if (value.byteLength === 0) break;
+      await sendChunk(value);
+      offset += value.byteLength;
     }
 
     dc.send(JSON.stringify({ type: "done" }));
