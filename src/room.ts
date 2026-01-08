@@ -2,16 +2,36 @@
 
 type Role = "offerer" | "answerer";
 
+type AnswererState = "waiting" | "active" | "done";
+
 type ServerToClient =
-  | { type: "role"; role: Role }
+  | { type: "role"; role: Role; cid: string }
   | { type: "peers"; count: number }
-  | { type: "peer-left" }
-  | { type: "room-full" };
+  | { type: "wait"; position?: number }
+  | { type: "start"; peerId?: string }
+  | { type: "peer-left"; peerId: string }
+  | { type: "offer"; from: string; sid: number; sdp: RTCSessionDescriptionInit }
+  | { type: "answer"; from: string; sid: number; sdp: RTCSessionDescriptionInit }
+  | { type: "candidate"; from: string; sid: number; candidate: RTCIceCandidateInit };
+
+type ClientToServer =
+  | { type: "offer"; to: string; sid: number; sdp: RTCSessionDescriptionInit }
+  | { type: "answer"; to: string; sid: number; sdp: RTCSessionDescriptionInit }
+  | { type: "candidate"; to: string; sid: number; candidate: RTCIceCandidateInit }
+  | { type: "transfer-done"; peerId: string };
 
 type SocketAttachment = {
   cid: string;
   role: Role;
+  state?: AnswererState;
+  joinedAt?: number;
 };
+
+type RoomConfig = {
+  maxConcurrent: number;
+};
+
+const DEFAULT_MAX_CONCURRENT = 3;
 
 function toText(message: ArrayBuffer | string) {
   return typeof message === "string" ? message : new TextDecoder().decode(message);
@@ -36,14 +56,29 @@ const DurableObjectBase =
   };
 
 export class Room extends DurableObjectBase {
+  // Design: README.md (multi-receiver queue); related: src/index.ts routes and src/client/room.tsx signaling.
   private ctx: DurableObjectState;
-
+  private config: RoomConfig | null = null;
   constructor(state: DurableObjectState, env: Bindings) {
     super(state, env);
     this.ctx = state;
   }
 
   async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+
+    if (url.pathname === "/config") {
+      if (request.method !== "POST") {
+        return new Response("Expected POST", { status: 400 });
+      }
+      const body = (await request.json()) as { maxConcurrent?: number };
+      const max = Number.isFinite(body.maxConcurrent) ? Math.floor(body.maxConcurrent!) : DEFAULT_MAX_CONCURRENT;
+      const maxConcurrent = Math.max(1, max);
+      this.config = { maxConcurrent };
+      await this.ctx.storage.put("config", this.config);
+      return new Response("OK");
+    }
+
     const upgrade = request.headers.get("Upgrade");
     if (!upgrade || upgrade.toLowerCase() !== "websocket") {
       return new Response("Expected Upgrade: websocket", { status: 426 });
@@ -52,69 +87,112 @@ export class Room extends DurableObjectBase {
       return new Response("Expected GET", { status: 400 });
     }
 
-    const url = new URL(request.url);
+    await this.ensureConfig();
+
     const clientId = url.searchParams.get("cid") ?? crypto.randomUUID();
 
     log("[room] new connection, cid:", clientId, "current sockets:", this.ctx.getWebSockets().length);
     this.closeDuplicateClient(clientId);
     log("[room] after closeDuplicate, sockets:", this.ctx.getWebSockets().length);
-    const role = this.pickRole(clientId);
+    const role = this.pickRole();
     log("[room] assigned role:", role, "to cid:", clientId);
-    if (!role) {
-      return new Response("Room is full", { status: 409 });
-    }
 
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
 
-    this.ctx.acceptWebSocket(server);
-    server.serializeAttachment({ cid: clientId, role } satisfies SocketAttachment);
+    const attachment: SocketAttachment = {
+      cid: clientId,
+      role,
+      joinedAt: Date.now(),
+    };
+    if (role === "answerer") attachment.state = "waiting";
 
-    server.send(
-      JSON.stringify({ type: "role", role } satisfies ServerToClient)
-    );
+    this.ctx.acceptWebSocket(server);
+    server.serializeAttachment(attachment);
+
+    server.send(JSON.stringify({ type: "role", role, cid: clientId } satisfies ServerToClient));
+    if (role === "answerer") {
+      server.send(JSON.stringify({ type: "wait" } satisfies ServerToClient));
+    }
 
     this.broadcastPeers();
+    this.fillSlots();
 
     return new Response(null, { status: 101, webSocket: client });
   }
 
   webSocketMessage(ws: WebSocket, message: ArrayBuffer | string) {
     const text = toText(message);
-    const fromAttachment = ws.deserializeAttachment() as SocketAttachment | null;
-    const sockets = this.ctx.getWebSockets();
+    const attachment = ws.deserializeAttachment() as SocketAttachment | null;
+    if (!attachment) return;
 
-    // メッセージの種類を確認
-    let msgType = "unknown";
+    let msg: ClientToServer | null = null;
     try {
-      const parsed = JSON.parse(text);
-      msgType = parsed.type || "unknown";
-    } catch {}
+      msg = JSON.parse(text) as ClientToServer;
+    } catch {
+      return;
+    }
 
-    log("[room] relaying message:", msgType, "from:", fromAttachment?.cid, "(", fromAttachment?.role, ") to", sockets.length - 1, "other sockets");
-
-    for (const other of sockets) {
-      if (other !== ws) {
-        const toAttachment = other.deserializeAttachment() as SocketAttachment | null;
-        log("[room]   -> sending to:", toAttachment?.cid, "(", toAttachment?.role, ")");
-        other.send(text);
+    if (msg.type === "transfer-done") {
+      if (attachment.role !== "offerer") return;
+      const peerSocket = this.socketByCid(msg.peerId);
+      if (peerSocket) {
+        this.setAnswererState(peerSocket, "done");
       }
+      this.fillSlots();
+      return;
+    }
+
+    if (msg.type === "offer" || msg.type === "answer" || msg.type === "candidate") {
+      const target = this.socketByCid(msg.to);
+      if (!target) return;
+
+      const payload =
+        msg.type === "offer"
+          ? { type: "offer", from: attachment.cid, sid: msg.sid, sdp: msg.sdp }
+          : msg.type === "answer"
+            ? { type: "answer", from: attachment.cid, sid: msg.sid, sdp: msg.sdp }
+            : { type: "candidate", from: attachment.cid, sid: msg.sid, candidate: msg.candidate };
+
+      target.send(JSON.stringify(payload satisfies ServerToClient));
     }
   }
 
   webSocketClose(ws: WebSocket) {
     const attachment = ws.deserializeAttachment() as SocketAttachment | null;
-    log("[room] webSocketClose, cid:", attachment?.cid, "role:", attachment?.role, "remaining sockets:", this.ctx.getWebSockets().length);
-    for (const other of this.ctx.getWebSockets()) {
-      if (other !== ws) {
-        other.send(JSON.stringify({ type: "peer-left" } satisfies ServerToClient));
+    log("[room] webSocketClose, cid:", attachment?.cid, "role:", attachment?.role);
+
+    if (attachment?.role === "answerer") {
+      const offerer = this.getOffererSocket();
+      if (offerer && attachment.cid) {
+        offerer.send(JSON.stringify({ type: "peer-left", peerId: attachment.cid } satisfies ServerToClient));
+      }
+      this.fillSlots();
+    }
+
+    if (attachment?.role === "offerer") {
+      for (const socket of this.answererSockets()) {
+        this.setAnswererState(socket, "waiting");
+        socket.send(JSON.stringify({ type: "wait" } satisfies ServerToClient));
       }
     }
+
     this.broadcastPeers();
   }
 
   webSocketError() {
     this.broadcastPeers();
+  }
+
+  private async ensureConfig() {
+    if (this.config) return this.config;
+    const stored = await this.ctx.storage.get<RoomConfig>("config");
+    if (stored?.maxConcurrent) {
+      this.config = stored;
+    } else {
+      this.config = { maxConcurrent: DEFAULT_MAX_CONCURRENT };
+    }
+    return this.config;
   }
 
   private broadcastPeers() {
@@ -123,22 +201,77 @@ export class Room extends DurableObjectBase {
     for (const socket of this.ctx.getWebSockets()) socket.send(payload);
   }
 
-  private pickRole(clientId: string) {
-    const roles = this.activeRoles(clientId);
-    if (!roles.has("offerer")) return "offerer";
-    if (!roles.has("answerer")) return "answerer";
+  private pickRole() {
+    const offerer = this.getOffererSocket();
+    if (!offerer) return "offerer";
+    return "answerer";
+  }
+
+  private getOffererSocket() {
+    for (const socket of this.ctx.getWebSockets()) {
+      const attachment = socket.deserializeAttachment() as SocketAttachment | null;
+      if (attachment?.role === "offerer") return socket;
+    }
     return null;
   }
 
-  private activeRoles(excludeCid?: string) {
-    const roles = new Set<Role>();
+  private answererSockets() {
+    const out: WebSocket[] = [];
     for (const socket of this.ctx.getWebSockets()) {
       const attachment = socket.deserializeAttachment() as SocketAttachment | null;
-      if (!attachment?.role) continue;
-      if (excludeCid && attachment.cid === excludeCid) continue;
-      roles.add(attachment.role);
+      if (attachment?.role === "answerer") out.push(socket);
     }
-    return roles;
+    return out;
+  }
+
+  private socketByCid(cid: string) {
+    for (const socket of this.ctx.getWebSockets()) {
+      const attachment = socket.deserializeAttachment() as SocketAttachment | null;
+      if (attachment?.cid === cid) return socket;
+    }
+    return null;
+  }
+
+  private setAnswererState(socket: WebSocket, state: AnswererState) {
+    const attachment = socket.deserializeAttachment() as SocketAttachment | null;
+    if (!attachment) return;
+    attachment.state = state;
+    socket.serializeAttachment(attachment);
+  }
+
+  private fillSlots() {
+    const offerer = this.getOffererSocket();
+    if (!offerer) return;
+
+    const maxConcurrent = this.config?.maxConcurrent ?? DEFAULT_MAX_CONCURRENT;
+
+    const active = this.answererSockets().filter((socket) => {
+      const attachment = socket.deserializeAttachment() as SocketAttachment | null;
+      return attachment?.state === "active";
+    });
+
+    const waiting = this.answererSockets()
+      .filter((socket) => {
+        const attachment = socket.deserializeAttachment() as SocketAttachment | null;
+        return attachment?.state === "waiting";
+      })
+      .sort((a, b) => {
+        const aJoined = (a.deserializeAttachment() as SocketAttachment | null)?.joinedAt ?? 0;
+        const bJoined = (b.deserializeAttachment() as SocketAttachment | null)?.joinedAt ?? 0;
+        return aJoined - bJoined;
+      });
+
+    const available = maxConcurrent - active.length;
+    if (available <= 0) return;
+
+    const toActivate = waiting.slice(0, available);
+    for (const socket of toActivate) {
+      const attachment = socket.deserializeAttachment() as SocketAttachment | null;
+      if (!attachment) continue;
+      this.setAnswererState(socket, "active");
+      socket.send(JSON.stringify({ type: "start" } satisfies ServerToClient));
+      offerer.send(JSON.stringify({ type: "start", peerId: attachment.cid } satisfies ServerToClient));
+    }
   }
 
   private closeDuplicateClient(clientId: string) {

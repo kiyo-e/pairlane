@@ -19,8 +19,17 @@ app.get("/r/:roomId", (c) => {
   return c.render(RoomPage({ roomId: c.req.param("roomId") }));
 });
 
-app.post("/api/rooms", (c) => {
+app.post("/api/rooms", async (c) => {
+  const body = (await c.req.json()) as { maxConcurrent?: number };
+  const maxConcurrent = Number.isFinite(body.maxConcurrent) ? Math.max(1, Math.floor(body.maxConcurrent!)) : 3;
   const roomId = generateRoomId(10);
+  const id = c.env.ROOM.idFromName(roomId);
+  const stub = c.env.ROOM.get(id);
+  await stub.fetch("https://room/config", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ maxConcurrent }),
+  });
   return c.json({ roomId });
 });
 

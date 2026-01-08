@@ -15,6 +15,7 @@ function HomeApp() {
   const [encryptEnabled, setEncryptEnabled] = useState(true);
   const [busy, setBusy] = useState(false);
   const [joinCode, setJoinCode] = useState("");
+  const [maxConcurrent, setMaxConcurrent] = useState(3);
 
   const handleEncryptToggle = useCallback((ev: Event) => {
     const target = ev.currentTarget as HTMLInputElement;
@@ -26,11 +27,19 @@ function HomeApp() {
     setJoinCode(target.value);
   }, []);
 
+  const handleMaxConcurrentInput = useCallback((ev: Event) => {
+    const target = ev.currentTarget as HTMLInputElement;
+    const next = Number.parseInt(target.value, 10);
+    if (Number.isFinite(next)) {
+      setMaxConcurrent(Math.max(1, Math.min(10, next)));
+    }
+  }, []);
+
   const handleCreate = useCallback(async () => {
     if (busy) return;
     setBusy(true);
     try {
-      const { roomId } = await apiCreateRoom();
+      const { roomId } = await apiCreateRoom({ maxConcurrent });
       if (encryptEnabled) {
         const rawKey = crypto.getRandomValues(new Uint8Array(32));
         const k = b64urlEncode(rawKey);
@@ -62,7 +71,7 @@ function HomeApp() {
           </p>
           <div class="heroChips">
             <span class="chip">NO SERVER STORAGE</span>
-            <span class="chip">1:1 P2P</span>
+            <span class="chip">1:N P2P</span>
             <span class="chip">WEBRTC</span>
           </div>
           <div class="steps">
@@ -90,6 +99,19 @@ function HomeApp() {
                 onInput={handleEncryptToggle}
               />
               <span>E2E暗号化ON</span>
+            </label>
+            <label class="row gap">
+              <span class="muted small">同時送信上限</span>
+              <input
+                id="maxConcurrent"
+                class="input"
+                type="number"
+                min="1"
+                max="10"
+                value={String(maxConcurrent)}
+                disabled={busy}
+                onInput={handleMaxConcurrentInput}
+              />
             </label>
             <button id="createBtn" class="btn primary" disabled={busy} onClick={handleCreate}>
               ルーム作成
@@ -123,8 +145,12 @@ function HomeApp() {
   );
 }
 
-async function apiCreateRoom(): Promise<{ roomId: string }> {
-  const res = await fetch("/api/rooms", { method: "POST" });
+async function apiCreateRoom(body: { maxConcurrent: number }): Promise<{ roomId: string }> {
+  const res = await fetch("/api/rooms", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
   if (!res.ok) throw new Error("ルーム作成に失敗しました");
   return res.json();
 }

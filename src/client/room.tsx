@@ -9,14 +9,21 @@ import { render, useCallback, useEffect, useMemo, useRef, useState } from "hono/
 type RoomRole = "offerer" | "answerer" | null;
 
 type RoomMessage =
-  | { type: "role"; role: "offerer" | "answerer" }
+  | { type: "role"; role: "offerer" | "answerer"; cid: string }
   | { type: "peers"; count: number }
-  | { type: "peer-left" }
-  | { type: "request-ready" }
-  | { type: "ready" }
-  | { type: "offer"; sid: number; sdp: RTCSessionDescriptionInit }
-  | { type: "answer"; sid: number; sdp: RTCSessionDescriptionInit }
-  | { type: "candidate"; sid: number; candidate: RTCIceCandidateInit };
+  | { type: "wait"; position?: number }
+  | { type: "start"; peerId?: string }
+  | { type: "peer-left"; peerId: string }
+  | { type: "offer"; from: string; sid: number; sdp: RTCSessionDescriptionInit }
+  | { type: "answer"; from: string; sid: number; sdp: RTCSessionDescriptionInit }
+  | { type: "candidate"; from: string; sid: number; candidate: RTCIceCandidateInit };
+
+type SignalOut =
+  | { type: "offer"; to: string; sid: number; sdp: RTCSessionDescriptionInit }
+  | { type: "answer"; to: string; sid: number; sdp: RTCSessionDescriptionInit }
+  | { type: "candidate"; to: string; sid: number; candidate: RTCIceCandidateInit };
+
+type ClientMessage = SignalOut | { type: "transfer-done"; peerId: string };
 
 type IncomingMeta = {
   type: "meta";
@@ -34,8 +41,6 @@ type OutgoingMeta = IncomingMeta;
 
 type PendingCandidate = { sid: number; candidate: RTCIceCandidateInit };
 
-type Nullable<T> = T | null;
-
 type AnyWebSocket = WebSocket;
 
 type DataChannel = RTCDataChannel;
@@ -48,6 +53,19 @@ type DownloadInfo = {
   url: string;
   name: string;
   size: number;
+};
+
+type OffererPeer = {
+  peerId: string;
+  pc: RTCPeerConnection;
+  dc: DataChannel | null;
+  signalSid: number;
+  activeSid: number | null;
+  remoteDescSet: boolean;
+  pendingCandidates: PendingCandidate[];
+  offerInFlight: boolean;
+  sending: boolean;
+  sent: boolean;
 };
 
 const clientId = getClientId();
@@ -70,27 +88,24 @@ function RoomApp({ roomId }: RoomAppProps) {
   const [sendProgress, setSendProgress] = useState({ sent: 0, total: 0 });
   const [recvProgress, setRecvProgress] = useState({ got: 0, total: 0 });
   const [download, setDownload] = useState<DownloadInfo | null>(null);
-  const [dataChannelReady, setDataChannelReady] = useState(false);
   const [dropHover, setDropHover] = useState(false);
 
   const roleRef = useRef<RoomRole>(role);
   const peersRef = useRef(peers);
   const selectedFileRef = useRef<File | null>(null);
   const sendIntentRef = useRef(false);
-  const sendingRef = useRef(false);
-  const pcRef = useRef<RTCPeerConnection | null>(null);
   const wsRef = useRef<AnyWebSocket | null>(null);
-  const dcRef = useRef<DataChannel | null>(null);
   const cryptoKeyRef = useRef<RoomCryptoKey>(null);
-  const remoteDescSetRef = useRef(false);
-  const offerInFlightRef = useRef(false);
-  const awaitingPeerRef = useRef(false);
-  const peerReadyRef = useRef(false); // answerer が ready を送ったかどうか
-  const reconnectTimerRef = useRef<number | null>(null);
-  const reconnectEpochRef = useRef(0);
-  const signalSidRef = useRef(0);
-  const activeSidRef = useRef<number | null>(null);
-  const pendingCandidatesRef = useRef<PendingCandidate[]>([]);
+
+  const offererPeersRef = useRef<Map<string, OffererPeer>>(new Map());
+
+  const receiverPcRef = useRef<RTCPeerConnection | null>(null);
+  const receiverDcRef = useRef<DataChannel | null>(null);
+  const receiverPeerIdRef = useRef<string | null>(null);
+  const receiverRemoteDescSetRef = useRef(false);
+  const receiverPendingCandidatesRef = useRef<PendingCandidate[]>([]);
+  const receiverActiveSidRef = useRef<number | null>(null);
+
   const incomingMetaRef = useRef<IncomingMeta | null>(null);
   const recvChunksRef = useRef<Uint8Array[]>([]);
   const recvBytesRef = useRef(0);
@@ -107,6 +122,13 @@ function RoomApp({ roomId }: RoomAppProps) {
   useEffect(() => {
     selectedFileRef.current = selectedFile;
   }, [selectedFile]);
+
+  const resetPeerSends = useCallback(() => {
+    for (const peer of offererPeersRef.current.values()) {
+      peer.sent = false;
+      peer.sending = false;
+    }
+  }, []);
 
   const handleCopyLink = useCallback(() => {
     copyText(location.href);
@@ -131,18 +153,20 @@ function RoomApp({ roomId }: RoomAppProps) {
     const f = ev.dataTransfer?.files?.[0];
     if (f) {
       sendIntentRef.current = false;
+      resetPeerSends();
       setSelectedFile(f);
     }
-  }, []);
+  }, [resetPeerSends]);
 
   const handleFileInput = useCallback((ev: Event) => {
     const input = ev.currentTarget as HTMLInputElement;
     const f = input.files?.[0];
     if (f) {
       sendIntentRef.current = false;
+      resetPeerSends();
       setSelectedFile(f);
     }
-  }, []);
+  }, [resetPeerSends]);
 
   const finalizeDownload = useCallback(async () => {
     const meta = incomingMetaRef.current;
@@ -161,8 +185,8 @@ function RoomApp({ roomId }: RoomAppProps) {
     setStatus("受信完了");
   }, []);
 
-  const sendFile = useCallback(async (file: File) => {
-    const dc = dcRef.current;
+  const sendFileToPeer = useCallback(async (peer: OffererPeer, file: File) => {
+    const dc = peer.dc;
     if (!dc) return;
 
     const encrypted = !!cryptoKeyRef.current;
@@ -173,7 +197,7 @@ function RoomApp({ roomId }: RoomAppProps) {
       mime: file.type || "application/octet-stream",
       encrypted,
     };
-    log("[send] starting:", meta.name, "size:", meta.size, "role:", roleRef.current);
+    log("[send] starting:", meta.name, "size:", meta.size, "peer:", peer.peerId);
     dc.send(JSON.stringify(meta));
 
     setStatus("送信中...");
@@ -213,31 +237,40 @@ function RoomApp({ roomId }: RoomAppProps) {
     }
 
     dc.send(JSON.stringify({ type: "done" } satisfies DoneMessage));
-    log("[send] completed, role:", roleRef.current);
+    log("[send] completed, peer:", peer.peerId);
     setStatus("送信完了");
+    peer.sent = true;
+
+    if (wsRef.current) {
+      sendWS(wsRef.current, { type: "transfer-done", peerId: peer.peerId });
+    }
   }, []);
 
-  const trySend = useCallback(async (reason: string) => {
+  const trySendPeer = useCallback(async (peer: OffererPeer, reason: string) => {
     if (!sendIntentRef.current) return;
-    if (sendingRef.current) return;
-    if (roleRef.current !== "offerer") return;
+    if (peer.sending || peer.sent) return;
     const file = selectedFileRef.current;
     if (!file) return;
-    if (peersRef.current < 2) return;
-    const dc = dcRef.current;
+    const dc = peer.dc;
     if (!dc || dc.readyState !== "open") return;
 
-    log("[send] triggered:", reason);
-    sendingRef.current = true;
-    await sendFile(file);
-    sendingRef.current = false;
-  }, [sendFile]);
+    log("[send] triggered:", reason, "peer:", peer.peerId);
+    peer.sending = true;
+    await sendFileToPeer(peer, file);
+    peer.sending = false;
+  }, [sendFileToPeer]);
+
+  const trySendAll = useCallback((reason: string) => {
+    for (const peer of offererPeersRef.current.values()) {
+      void trySendPeer(peer, reason);
+    }
+  }, [trySendPeer]);
 
   const handleSend = useCallback(async () => {
     if (!selectedFile) return;
     sendIntentRef.current = true;
-    await trySend("manual");
-  }, [selectedFile, trySend]);
+    trySendAll("manual");
+  }, [selectedFile, trySendAll]);
 
   useEffect(() => {
     const boot = async () => {
@@ -249,127 +282,118 @@ function RoomApp({ roomId }: RoomAppProps) {
       const ws = await connectSignaling(roomId, clientId);
       wsRef.current = ws;
 
-      const ensureOffer = async () => {
-        const pc = pcRef.current;
-        log("[ensureOffer] checking conditions:", {
-          hasPc: !!pc,
-          role: roleRef.current,
-          peers: peersRef.current,
-          peerReady: peerReadyRef.current,
-          offerInFlight: offerInFlightRef.current,
-          signalingState: pc?.signalingState,
-        });
-        if (!pc) return;
-        if (roleRef.current !== "offerer") return;
-        if (peersRef.current < 2) return;
-        if (!peerReadyRef.current) return; // answerer が ready になるまで待つ
-        if (offerInFlightRef.current) return;
-        if (pc.signalingState !== "stable") return;
-
-        offerInFlightRef.current = true;
-        try {
-          const sid = ++signalSidRef.current;
-          activeSidRef.current = sid;
-
-          log("[ensureOffer] creating offer, sid:", sid);
-          const offer = await pc.createOffer({ iceRestart: true });
-          await pc.setLocalDescription(offer);
-          log("[ensureOffer] sending offer");
-          sendWS(ws, { type: "offer", sid, sdp: pc.localDescription! });
-        } finally {
-          offerInFlightRef.current = false;
-        }
+      const wireOffererDataChannel = (peer: OffererPeer, ch: DataChannel) => {
+        ch.binaryType = "arraybuffer";
+        ch.onopen = () => {
+          log("[rtc] datachannel open (peer:", peer.peerId + ")");
+          setStatus("データチャネル準備完了");
+          void trySendPeer(peer, "datachannel-open");
+        };
+        ch.onclose = () => {
+          log("[rtc] datachannel close (peer:", peer.peerId + ")");
+        };
+        ch.onerror = () => {
+          console.warn("[rtc] datachannel error (peer:", peer.peerId + ")");
+        };
       };
 
-      const flushCandidates = async () => {
-        const pc = pcRef.current;
-        if (!pc) return;
-        const sid = activeSidRef.current;
-        if (sid == null) return;
+      const createOffererPeer = (peerId: string) => {
+        const existing = offererPeersRef.current.get(peerId);
+        if (existing) return existing;
 
-        const pending = pendingCandidatesRef.current;
+        const pc = new RTCPeerConnection({
+          iceServers: [{ urls: "stun:stun.cloudflare.com:3478" }],
+        });
+
+        const peer: OffererPeer = {
+          peerId,
+          pc,
+          dc: null,
+          signalSid: 0,
+          activeSid: null,
+          remoteDescSet: false,
+          pendingCandidates: [],
+          offerInFlight: false,
+          sending: false,
+          sent: false,
+        };
+
+        pc.onicecandidate = (ev) => {
+          if (!ev.candidate) return;
+          const sid = peer.activeSid;
+          if (sid == null) return;
+          if (!wsRef.current) return;
+          sendWS(wsRef.current, {
+            type: "candidate",
+            to: peer.peerId,
+            sid,
+            candidate: ev.candidate.toJSON(),
+          });
+        };
+
+        pc.onconnectionstatechange = () => {
+          log("[rtc] connectionState:", pc.connectionState, "(peer:", peer.peerId + ")");
+        };
+
+        const dc = pc.createDataChannel("file", { ordered: true });
+        peer.dc = dc;
+        wireOffererDataChannel(peer, dc);
+
+        offererPeersRef.current.set(peerId, peer);
+        return peer;
+      };
+
+      const closeOffererPeer = (peerId: string) => {
+        const peer = offererPeersRef.current.get(peerId);
+        if (!peer) return;
+        peer.dc?.close();
+        peer.pc.close();
+        offererPeersRef.current.delete(peerId);
+      };
+
+      const flushOffererCandidates = async (peer: OffererPeer) => {
+        const pending = peer.pendingCandidates;
         let i = 0;
         while (i < pending.length) {
           const item = pending[i];
-          if (item.sid !== sid) {
+          if (item.sid !== peer.activeSid) {
             pending.splice(i, 1);
             continue;
           }
           pending.splice(i, 1);
-          try {
-            await pc.addIceCandidate(item.candidate);
-          } catch (e) {
-            console.warn("[rtc] addIceCandidate failed (ignored):", e);
-          }
+          await peer.pc.addIceCandidate(item.candidate);
         }
       };
 
-      const resetPeerState = () => {
-        remoteDescSetRef.current = false;
-        offerInFlightRef.current = false;
-        peerReadyRef.current = false;
-        pendingCandidatesRef.current = [];
-        activeSidRef.current = null;
-        setDataChannelReady(false);
-        const dc = dcRef.current;
-        if (dc) {
-          dc.onopen = null;
-          dc.onclose = null;
-          dc.onerror = null;
-          dc.onmessage = null;
-          dc.onbufferedamountlow = null;
-          dc.close();
+      const sendOffer = async (peer: OffererPeer) => {
+        if (peer.offerInFlight) return;
+        if (peer.pc.signalingState !== "stable") return;
+
+        peer.offerInFlight = true;
+        const sid = ++peer.signalSid;
+        peer.activeSid = sid;
+
+        const offer = await peer.pc.createOffer({ iceRestart: true });
+        await peer.pc.setLocalDescription(offer);
+        if (wsRef.current) {
+          sendWS(wsRef.current, { type: "offer", to: peer.peerId, sid, sdp: peer.pc.localDescription! });
         }
-        dcRef.current = null;
+        peer.offerInFlight = false;
       };
 
-      const cancelReconnect = () => {
-        reconnectEpochRef.current += 1;
-        if (reconnectTimerRef.current !== null) {
-          clearTimeout(reconnectTimerRef.current);
-          reconnectTimerRef.current = null;
-        }
-      };
-
-      const armReconnect = (reason: string) => {
-        if (reconnectTimerRef.current !== null) return;
-        const epoch = (reconnectEpochRef.current += 1);
-        reconnectTimerRef.current = window.setTimeout(() => {
-          if (epoch !== reconnectEpochRef.current) return;
-          reconnectTimerRef.current = null;
-
-          const pc = pcRef.current;
-          const dc = dcRef.current;
-          if (pc?.connectionState === "connected" || dc?.readyState === "open") return;
-
-          if (peersRef.current < 2) {
-            awaitingPeerRef.current = true;
-            return;
-          }
-          resetPeerConnection(reason);
-        }, 800);
-      };
-
-      const wireDataChannel = (ch: DataChannel) => {
+      const wireReceiverDataChannel = (ch: DataChannel) => {
         ch.binaryType = "arraybuffer";
         ch.onopen = () => {
-          log("[rtc] datachannel open (role:", roleRef.current + ")");
-          cancelReconnect();
+          log("[rtc] datachannel open (receiver)");
           setStatus("データチャネル準備完了");
-          setDataChannelReady(true);
-          void trySend("datachannel-open");
         };
         ch.onclose = () => {
-          log("[rtc] datachannel close (role:", roleRef.current + ")");
+          log("[rtc] datachannel close (receiver)");
           setStatus("データチャネル切断");
-          setDataChannelReady(false);
-          armReconnect("datachannel-close");
         };
         ch.onerror = () => {
-          console.warn("[rtc] datachannel error");
+          console.warn("[rtc] datachannel error (receiver)");
           setStatus("データチャネルエラー");
-          setDataChannelReady(false);
-          armReconnect("datachannel-error");
         };
 
         ch.onmessage = async (ev) => {
@@ -378,10 +402,11 @@ function RoomApp({ roomId }: RoomAppProps) {
             if (!m) return;
 
             if (m.type === "meta") {
-              log("[recv] starting:", m.name, "size:", m.size, "role:", roleRef.current);
+              log("[recv] starting:", m.name, "size:", m.size);
               incomingMetaRef.current = m;
               recvChunksRef.current = [];
               recvBytesRef.current = 0;
+              setDownload(null);
               setRecvProgress({ got: 0, total: m.size });
 
               if (m.encrypted && !cryptoKeyRef.current) {
@@ -392,7 +417,7 @@ function RoomApp({ roomId }: RoomAppProps) {
             }
 
             if (m.type === "done") {
-              log("[recv] completed, role:", roleRef.current);
+              log("[recv] completed");
               await finalizeDownload();
             }
             return;
@@ -411,92 +436,59 @@ function RoomApp({ roomId }: RoomAppProps) {
         };
       };
 
-      const createPeerConnection = () => {
-        const existing = pcRef.current;
-        if (existing) {
-          existing.onicecandidate = null;
-          existing.oniceconnectionstatechange = null;
-          existing.onicegatheringstatechange = null;
-          existing.onsignalingstatechange = null;
-          existing.onconnectionstatechange = null;
-          existing.ondatachannel = null;
-          existing.close();
-        }
-
-        resetPeerState();
+      const createReceiverPc = (peerId: string) => {
+        if (receiverPcRef.current) return receiverPcRef.current;
 
         const pc = new RTCPeerConnection({
           iceServers: [{ urls: "stun:stun.cloudflare.com:3478" }],
         });
-        pcRef.current = pc;
+        receiverPcRef.current = pc;
+        receiverPeerIdRef.current = peerId;
+        receiverRemoteDescSetRef.current = false;
+        receiverPendingCandidatesRef.current = [];
 
         pc.onicecandidate = (ev) => {
-          if (pcRef.current !== pc) return;
           if (!ev.candidate) return;
-          const sid = activeSidRef.current;
-          if (sid == null) return;
-          sendWS(ws, { type: "candidate", sid, candidate: ev.candidate.toJSON() });
-        };
-
-        pc.oniceconnectionstatechange = () => {
-          if (pcRef.current !== pc) return;
-          log("[rtc] iceConnectionState:", pc.iceConnectionState, "(role:", roleRef.current + ")");
-        };
-
-        pc.onicegatheringstatechange = () => {
-          if (pcRef.current !== pc) return;
-          log("[rtc] iceGatheringState:", pc.iceGatheringState, "(role:", roleRef.current + ")");
-        };
-
-        pc.onsignalingstatechange = () => {
-          if (pcRef.current !== pc) return;
-          log("[rtc] signalingState:", pc.signalingState, "(role:", roleRef.current + ")");
+          const sid = receiverActiveSidRef.current;
+          const to = receiverPeerIdRef.current;
+          if (sid == null || !to || !wsRef.current) return;
+          sendWS(wsRef.current, {
+            type: "candidate",
+            to,
+            sid,
+            candidate: ev.candidate.toJSON(),
+          });
         };
 
         pc.onconnectionstatechange = () => {
-          // 現在のPCでない場合は無視（古いPCのイベント）
-          if (pcRef.current !== pc) {
-            log("[rtc] ignoring stale connectionState event from old PC");
-            return;
-          }
-          const s = pc.connectionState;
-          log("[rtc] connectionState:", s, "(role:", roleRef.current + ")");
-          if (s === "connected") {
-            cancelReconnect();
-            setStatus("P2P接続完了");
-          }
-          else if (s === "failed") {
-            setStatus("P2P接続失敗（ネットワーク条件の可能性）");
-            resetPeerConnection("connection-failed");
-          } else if (s === "disconnected") {
-            setStatus("P2P接続が切断されました");
-            armReconnect("connection-disconnected");
-          } else if (s === "connecting") setStatus("P2P接続中...");
-          else setStatus(`状態: ${s}`);
+          log("[rtc] connectionState:", pc.connectionState, "(receiver)");
         };
 
         pc.ondatachannel = (ev) => {
-          if (pcRef.current !== pc) return;
-          dcRef.current = ev.channel;
-          wireDataChannel(ev.channel);
+          receiverDcRef.current = ev.channel;
+          wireReceiverDataChannel(ev.channel);
         };
+
+        return pc;
       };
 
-      const resetPeerConnection = (reason: string) => {
-        cancelReconnect();
-        log("[rtc] reset:", reason);
-        createPeerConnection();
-        const currentPc = pcRef.current;
-        if (currentPc && roleRef.current === "offerer") {
-          dcRef.current = currentPc.createDataChannel("file", { ordered: true });
-          wireDataChannel(dcRef.current);
+      const flushReceiverCandidates = async () => {
+        const pc = receiverPcRef.current;
+        const sid = receiverActiveSidRef.current;
+        if (!pc || sid == null) return;
+
+        const pending = receiverPendingCandidatesRef.current;
+        let i = 0;
+        while (i < pending.length) {
+          const item = pending[i];
+          if (item.sid !== sid) {
+            pending.splice(i, 1);
+            continue;
+          }
+          pending.splice(i, 1);
+          await pc.addIceCandidate(item.candidate);
         }
-        const shouldAwaitPeer = peersRef.current < 2;
-        awaitingPeerRef.current = shouldAwaitPeer;
-        if (!shouldAwaitPeer) ensureOffer();
       };
-
-      createPeerConnection();
 
       ws.onmessage = async (ev) => {
         const msg = safeJson(ev.data) as RoomMessage | null;
@@ -507,142 +499,101 @@ function RoomApp({ roomId }: RoomAppProps) {
           roleRef.current = msg.role;
           setRole(msg.role);
           if (msg.role === "offerer") {
-            const currentPc = pcRef.current;
-            if (currentPc) {
-              dcRef.current = currentPc.createDataChannel("file", { ordered: true });
-              wireDataChannel(dcRef.current);
-            }
-            ensureOffer();
+            setStatus("送信側として待機中...");
+          } else {
+            setStatus("受信側として待機中...");
           }
           return;
         }
 
         if (msg.type === "peers") {
-          log("[ws] peers:", msg.count, "awaitingPeer:", awaitingPeerRef.current, "role:", roleRef.current);
           peersRef.current = msg.count;
           setPeers(msg.count);
+          return;
+        }
 
-          if (msg.count < 2) {
-            setStatus("相手の参加待ち...");
-            awaitingPeerRef.current = true;
+        if (msg.type === "wait") {
+          if (roleRef.current === "answerer") {
+            setStatus("順番待ち...");
+          }
+          return;
+        }
+
+        if (msg.type === "start") {
+          if (roleRef.current === "offerer" && msg.peerId) {
+            const peer = createOffererPeer(msg.peerId);
+            await sendOffer(peer);
             return;
           }
-
-          // peers >= 2 になった
-          if (awaitingPeerRef.current) {
-            awaitingPeerRef.current = false;
-            log("[ws] peers >= 2, resetting peer connection");
-            resetPeerConnection("peer-joined");
+          if (roleRef.current === "answerer") {
+            setStatus("接続準備中...");
           }
-
-          // offerer は answerer に request-ready を送信
-          if (roleRef.current === "offerer" && !peerReadyRef.current) {
-            log("[ws] sending request-ready to answerer");
-            sendWS(ws, { type: "request-ready" });
-          }
-
-          // offerer は ready を受信済みなら offer を送信
-          if (roleRef.current === "offerer") {
-            ensureOffer();
-            void trySend("peers");
-          }
-          return;
-        }
-
-        if (msg.type === "request-ready") {
-          // offerer からの request-ready を受信したら ready を返す
-          log("[ws] received request-ready, sending ready");
-          sendWS(ws, { type: "ready" });
-          return;
-        }
-
-        if (msg.type === "ready") {
-          log("[ws] received ready from answerer");
-          peerReadyRef.current = true;
-          ensureOffer();
           return;
         }
 
         if (msg.type === "peer-left") {
-          log("[ws] peer-left, preparing for reconnection");
-          setStatus("相手が退出しました");
-
-          peersRef.current = 1;
-          setPeers(1);
-          awaitingPeerRef.current = true;
-
-          cancelReconnect();
-
-          // 既存の PeerConnection をクリーンアップして新しいものを作成
-          // 次の peers メッセージで再接続処理が行われる
-          createPeerConnection();
-
-          // offerer の場合は DataChannel を事前作成（次の offer で使用）
           if (roleRef.current === "offerer") {
-            const pc = pcRef.current;
-            if (pc) {
-              dcRef.current = pc.createDataChannel("file", { ordered: true });
-              wireDataChannel(dcRef.current);
-            }
+            closeOffererPeer(msg.peerId);
           }
-
           return;
         }
 
         if (msg.type === "offer") {
-          log("[ws] received offer, sid:", msg.sid);
-          const pc = pcRef.current;
-          if (!pc) {
-            console.warn("[ws] offer received but no PeerConnection!");
-            return;
-          }
-
-          activeSidRef.current = msg.sid;
-          log("[ws] setting remote description...");
+          if (roleRef.current !== "answerer") return;
+          const pc = createReceiverPc(msg.from);
+          receiverActiveSidRef.current = msg.sid;
           await pc.setRemoteDescription(msg.sdp);
-          remoteDescSetRef.current = true;
-          await flushCandidates();
+          receiverRemoteDescSetRef.current = true;
+          await flushReceiverCandidates();
 
-          log("[ws] creating answer...");
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
-          log("[ws] sending answer, sid:", msg.sid);
-          sendWS(ws, { type: "answer", sid: msg.sid, sdp: pc.localDescription! });
+          if (wsRef.current) {
+            sendWS(wsRef.current, {
+              type: "answer",
+              to: msg.from,
+              sid: msg.sid,
+              sdp: pc.localDescription!,
+            });
+          }
           return;
         }
 
         if (msg.type === "answer") {
-          const pc = pcRef.current;
-          if (!pc) return;
+          if (roleRef.current !== "offerer") return;
+          const peer = offererPeersRef.current.get(msg.from);
+          if (!peer) return;
+          if (peer.activeSid == null || msg.sid !== peer.activeSid) return;
 
-          const sid = activeSidRef.current;
-          if (sid == null || msg.sid !== sid) {
-            log("[ws] ignore stale answer", { got: msg.sid, want: sid });
-            return;
-          }
-
-          await pc.setRemoteDescription(msg.sdp);
-          remoteDescSetRef.current = true;
-          await flushCandidates();
+          await peer.pc.setRemoteDescription(msg.sdp);
+          peer.remoteDescSet = true;
+          await flushOffererCandidates(peer);
           return;
         }
 
         if (msg.type === "candidate") {
-          const pc = pcRef.current;
-          if (!pc) return;
+          if (roleRef.current === "offerer") {
+            const peer = offererPeersRef.current.get(msg.from);
+            if (!peer) return;
+            if (peer.activeSid == null || msg.sid !== peer.activeSid) return;
 
-          const sid = activeSidRef.current;
-          if (sid == null || msg.sid !== sid) {
+            if (!peer.remoteDescSet) {
+              peer.pendingCandidates.push({ sid: msg.sid, candidate: msg.candidate });
+            } else {
+              await peer.pc.addIceCandidate(msg.candidate);
+            }
             return;
           }
 
-          if (!remoteDescSetRef.current) {
-            pendingCandidatesRef.current.push({ sid: msg.sid, candidate: msg.candidate });
-          } else {
-            try {
+          if (roleRef.current === "answerer") {
+            if (msg.from !== receiverPeerIdRef.current) return;
+            const pc = receiverPcRef.current;
+            if (!pc) return;
+
+            if (!receiverRemoteDescSetRef.current) {
+              receiverPendingCandidatesRef.current.push({ sid: msg.sid, candidate: msg.candidate });
+            } else {
               await pc.addIceCandidate(msg.candidate);
-            } catch (e) {
-              console.warn("[rtc] addIceCandidate failed (ignored):", e);
             }
           }
         }
@@ -658,18 +609,19 @@ function RoomApp({ roomId }: RoomAppProps) {
 
     return () => {
       wsRef.current?.close();
-      dcRef.current?.close();
-      pcRef.current?.close();
-      if (reconnectTimerRef.current !== null) {
-        clearTimeout(reconnectTimerRef.current);
-        reconnectTimerRef.current = null;
+      receiverDcRef.current?.close();
+      receiverPcRef.current?.close();
+      for (const peer of offererPeersRef.current.values()) {
+        peer.dc?.close();
+        peer.pc.close();
       }
+      offererPeersRef.current.clear();
       if (downloadUrlRef.current) {
         URL.revokeObjectURL(downloadUrlRef.current);
         downloadUrlRef.current = null;
       }
     };
-  }, [roomId, finalizeDownload]);
+  }, [roomId, finalizeDownload, trySendPeer]);
 
   const roleLabel = useMemo(() => {
     if (role === "offerer") return "送信側（offerer）";
@@ -702,7 +654,7 @@ function RoomApp({ roomId }: RoomAppProps) {
     return `${selectedFile.name} (${formatBytes(selectedFile.size)})`;
   }, [selectedFile]);
 
-  const canSend = role === "offerer" && dataChannelReady && !!selectedFile && peers >= 2;
+  const canSend = role === "offerer" && !!selectedFile;
   const showSender = role === "offerer";
   const showReceiver = role === "answerer";
 
@@ -821,7 +773,7 @@ function connectSignaling(roomId: string, clientId: string) {
   });
 }
 
-function sendWS(ws: AnyWebSocket, obj: RoomMessage) {
+function sendWS(ws: AnyWebSocket, obj: ClientMessage) {
   ws.send(JSON.stringify(obj));
 }
 

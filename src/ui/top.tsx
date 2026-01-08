@@ -18,7 +18,7 @@ export function TopPage() {
             </p>
             <div class="heroChips">
               <span class="chip">NO SERVER STORAGE</span>
-              <span class="chip">1:1 P2P</span>
+              <span class="chip">1:N P2P</span>
               <span class="chip">WEBRTC</span>
             </div>
             <div class="steps">
@@ -31,12 +31,16 @@ export function TopPage() {
           <div class="homePanel">
             <div class="panelBlock">
               <div class="panelTitle">送信を開始</div>
-              <label class="toggle">
-                <input id="encryptToggle" type="checkbox" checked />
-                <span>E2E暗号化ON</span>
-              </label>
-              <button id="createBtn" class="btn primary">ルーム作成</button>
-            </div>
+            <label class="toggle">
+              <input id="encryptToggle" type="checkbox" checked />
+              <span>E2E暗号化ON</span>
+            </label>
+            <label class="row gap">
+              <span class="muted small">同時送信上限</span>
+              <input id="maxConcurrent" class="input" type="number" min="1" max="10" value="3" />
+            </label>
+            <button id="createBtn" class="btn primary">ルーム作成</button>
+          </div>
 
             <hr class="sep" />
 
