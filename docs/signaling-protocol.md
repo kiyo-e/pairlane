@@ -4,9 +4,21 @@ This document describes the signaling protocol used for establishing WebRTC peer
 
 ## Overview
 
-The application uses a Cloudflare Durable Object as the signaling server to facilitate WebRTC connection establishment between two peers: an **offerer** (sender) and an **answerer** (receiver).
+The application uses a Cloudflare Durable Object as the signaling server to facilitate WebRTC connection establishment between peers: an **offerer** (sender) and **answerers** (receivers).
+
+### Technology Stack
+
+- **Framework**: [Hono](https://hono.dev/) - Fast web framework for Cloudflare Workers
+- **Frontend**: [Vite SSR Components](https://github.com/lideming/vite-ssr-components) - SSR with client-side hydration
+- **Rendering**: JSX (Hono JSX for SSR, Hono JSX/DOM for client)
+- **WebRTC**: Native browser APIs for P2P data transfer
+- **Deployment**: Cloudflare Workers + Durable Objects
 
 ## Architecture
+
+The application supports **1:N P2P connections**, where one sender (offerer) can distribute files to multiple receivers (answerers) simultaneously.
+
+### Basic Signaling Flow (1:1 Example)
 
 ```
 ┌─────────────┐         ┌─────────────────────┐         ┌─────────────┐
@@ -17,30 +29,54 @@ The application uses a Cloudflare Durable Object as the signaling server to faci
        └───────────────── WebRTC P2P ──────────────────────────┘
 ```
 
+### 1:N Distribution
+
+```
+                          ┌─────────────────────┐
+                          │  Durable Object     │
+                     ┌───►│  (Signaling Server) │◄────┐
+                     │    └─────────────────────┘     │
+                     │WS                            WS│
+┌─────────────┐      │                                │     ┌─────────────┐
+│   Offerer   │──────┘                                └─────│ Answerer 1  │
+│  (Sender)   │────────────── WebRTC P2P ─────────────────►│ (Receiver)  │
+└─────────────┘                                             └─────────────┘
+       │                                                     ┌─────────────┐
+       └────────────────── WebRTC P2P ─────────────────────►│ Answerer 2  │
+                                                             └─────────────┘
+```
+
 ## Message Types
 
 ### Server → Client Messages
 
 | Type | Description | Payload |
 |------|-------------|---------|
-| `role` | Assigns role to client | `{ role: "offerer" \| "answerer" }` |
+| `role` | Assigns role to client | `{ role: "offerer" \| "answerer", cid: string }` |
 | `peers` | Current peer count in room | `{ count: number }` |
-| `peer-left` | Notifies that the other peer disconnected | none |
-| `room-full` | Room is at capacity (2 peers) | none |
+| `wait` | Answerer is in queue | `{ position?: number }` |
+| `start` | Begin connection with specific peer | `{ peerId?: string }` |
+| `peer-left` | Notifies that a peer disconnected | `{ peerId: string }` |
 
 ### Client → Client Messages (via Server Relay)
 
 | Type | Description | Payload |
 |------|-------------|---------|
-| `request-ready` | Offerer requests answerer readiness | none |
-| `ready` | Answerer confirms readiness | none |
-| `offer` | WebRTC SDP offer | `{ sid: number, sdp: RTCSessionDescriptionInit }` |
-| `answer` | WebRTC SDP answer | `{ sid: number, sdp: RTCSessionDescriptionInit }` |
-| `candidate` | ICE candidate | `{ sid: number, candidate: RTCIceCandidateInit }` |
+| `offer` | WebRTC SDP offer | `{ from: string, to: string, sid: number, sdp: RTCSessionDescriptionInit }` |
+| `answer` | WebRTC SDP answer | `{ from: string, to: string, sid: number, sdp: RTCSessionDescriptionInit }` |
+| `candidate` | ICE candidate | `{ from: string, to: string, sid: number, candidate: RTCIceCandidateInit }` |
+
+### Client → Server Messages
+
+| Type | Description | Payload |
+|------|-------------|---------|
+| `transfer-done` | Notify completion of file transfer to specific peer | `{ peerId: string }` |
 
 ## Connection Flow
 
-### Initial Connection
+The server implements a **queue system** to manage concurrent connections. When `maxConcurrent` is set (e.g., 3), only that many answerers can actively transfer at once. Additional answerers wait in queue until a slot becomes available.
+
+### Initial Connection (1:1 Example)
 
 ```
 Offerer                    Server                    Answerer
@@ -51,11 +87,10 @@ Offerer                    Server                    Answerer
    │                         │                          │
    │                         │◄──── WS Connect ─────────│
    │                         │───── role: answerer ────►│
+   │                         │───── wait ──────────────►│
    │◄─── peers: 2 ───────────│───── peers: 2 ─────────►│
    │                         │                          │
-   │──── request-ready ─────►│───── request-ready ────►│
-   │                         │                          │
-   │◄─── ready ──────────────│◄──── ready ─────────────│
+   │◄─── start (peerId) ─────│───── start ─────────────►│
    │                         │                          │
    │──── offer (sid:1) ─────►│───── offer (sid:1) ────►│
    │                         │                          │
@@ -64,32 +99,39 @@ Offerer                    Server                    Answerer
    │◄───► candidate ◄───────►│◄────► candidate ◄──────►│
    │                         │                          │
    ├─────────── WebRTC P2P Connection ─────────────────┤
+   │                         │                          │
+   │ (transfer complete)     │                          │
+   │──── transfer-done ─────►│                          │
 ```
 
-### Reconnection (Answerer Reloads)
+### 1:N with Queue (maxConcurrent = 2)
 
 ```
-Offerer                    Server                    Answerer
-   │                         │                          │
-   │ (connected)             │                (reload)  X
-   │                         │                          │
-   │◄─── peer-left ──────────│                          │
-   │◄─── peers: 1 ───────────│                          │
-   │                         │                          │
-   │  (reset PeerConnection) │◄──── WS Connect ─────────│
-   │  (awaitingPeer = true)  │───── role: answerer ────►│
-   │                         │                          │
-   │◄─── peers: 2 ───────────│───── peers: 2 ─────────►│
-   │                         │                          │
-   │──── request-ready ─────►│───── request-ready ────►│
-   │                         │                          │
-   │◄─── ready ──────────────│◄──── ready ─────────────│
-   │                         │                          │
-   │──── offer (sid:2) ─────►│───── offer (sid:2) ────►│
-   │                         │                          │
-   │◄─── answer (sid:2) ─────│◄──── answer (sid:2) ────│
-   │                         │                          │
-   ├─────────── WebRTC P2P Reconnected ────────────────┤
+Offerer            Server           Answerer 1       Answerer 2       Answerer 3
+   │                 │                   │                │                │
+   │─── connect ────►│                   │                │                │
+   │◄── role ────────│                   │                │                │
+   │                 │◄─── connect ──────│                │                │
+   │                 │──── role ────────►│                │                │
+   │                 │──── wait ────────►│                │                │
+   │                 │◄─── connect ──────┼────────────────│                │
+   │                 │──── role ──────────────────────────►│                │
+   │                 │──── wait ──────────────────────────►│                │
+   │                 │◄─── connect ──────┼────────────────┼────────────────│
+   │                 │──── role ──────────────────────────────────────────►│
+   │                 │──── wait ──────────────────────────────────────────►│
+   │                 │                   │                │                │
+   │◄── start (A1) ──│─── start ────────►│                │                │
+   │◄── start (A2) ──│─── start ──────────────────────────►│                │
+   │                 │                   │                │                │
+   │   (A3 waits in queue)              │                │                │
+   │                 │                   │                │                │
+   │ (P2P with A1)  │ (P2P with A2)    │                │                │
+   │                 │                   │                │                │
+   │─ transfer-done(A1) ──►│             │                │                │
+   │◄── start (A3) ──│─── start ──────────────────────────────────────────►│
+   │                 │                   │                │                │
+   │ (P2P with A3)  │                   │                │                │
 ```
 
 ## Session ID (sid)
@@ -102,32 +144,62 @@ The `sid` (session ID) is used to prevent stale messages from being processed du
 
 ## Key State Variables
 
-### Client-side References
+### Server-side State (Room Durable Object)
+
+| Variable | Type | Description |
+|----------|------|-------------|
+| `config` | `RoomConfig` | Room configuration including `maxConcurrent` |
+| `SocketAttachment.role` | `"offerer" \| "answerer"` | Client role |
+| `SocketAttachment.state` | `"waiting" \| "active" \| "done"` | Answerer state in queue |
+| `SocketAttachment.cid` | `string` | Client ID (persistent across page reloads) |
+| `SocketAttachment.joinedAt` | `number` | Timestamp for queue ordering |
+
+### Client-side State (Offerer)
 
 | Variable | Type | Description |
 |----------|------|-------------|
 | `roleRef` | `"offerer" \| "answerer" \| null` | Assigned role |
 | `peersRef` | `number` | Current peer count |
-| `awaitingPeerRef` | `boolean` | Waiting for peer to join/rejoin |
-| `peerReadyRef` | `boolean` | Whether answerer has signaled ready |
+| `offererPeersRef` | `Map<string, OffererPeer>` | Map of peerId → peer connection state |
+| `OffererPeer.pc` | `RTCPeerConnection` | WebRTC peer connection |
+| `OffererPeer.dc` | `RTCDataChannel \| null` | Data channel for file transfer |
+| `OffererPeer.signalSid` | `number` | Session ID for signaling |
+
+### Client-side State (Answerer)
+
+| Variable | Type | Description |
+|----------|------|-------------|
+| `roleRef` | `"offerer" \| "answerer" \| null` | Assigned role |
+| `peersRef` | `number` | Current peer count |
 | `pcRef` | `RTCPeerConnection \| null` | Current peer connection |
 | `dcRef` | `RTCDataChannel \| null` | Current data channel |
 | `activeSidRef` | `number \| null` | Current session ID |
 
-## Timing Considerations
+## Queue Management
 
-### The Ready Handshake Problem
+### Slot Allocation Algorithm
 
-When a peer reconnects, there's a race condition:
-1. Server broadcasts `peers: 2` immediately when new socket connects
-2. But the new client's WebSocket `onmessage` handler may not be set up yet
+The `fillSlots()` function manages concurrent connections:
 
-**Solution**: The `request-ready` / `ready` handshake ensures:
-1. Offerer sends `request-ready` only after its handler is ready
-2. Answerer responds with `ready` only after receiving `request-ready`
-3. Offerer sends `offer` only after receiving `ready`
+1. **Count active connections**: Count answerers with `state === "active"`
+2. **Calculate available slots**: `maxConcurrent - activeCount`
+3. **Select waiting answerers**: Sort by `joinedAt` timestamp (FIFO)
+4. **Activate next in queue**: Send `start` to both answerer and offerer
 
-This guarantees the answerer's WebSocket handler is fully initialized before receiving the offer.
+### When fillSlots() is Called
+
+- When a new answerer joins
+- When an answerer disconnects (`webSocketClose`)
+- When offerer signals `transfer-done` for a peer
+
+### State Transitions
+
+```
+Answerer joins → waiting
+fillSlots() with available slot → active
+transfer completes → done
+fillSlots() called → next waiting → active
+```
 
 ## Data Channel
 
@@ -150,6 +222,32 @@ Sender                                    Receiver
    │──── { type: "done" } ───────────────────►│
 ```
 
+#### Metadata Message
+
+```typescript
+{
+  type: "meta",
+  name: string,        // File name
+  size: number,        // File size in bytes
+  mime: string,        // MIME type
+  encrypted: boolean   // Whether chunks are encrypted
+}
+```
+
+### End-to-End Encryption (Optional)
+
+When encryption is enabled:
+
+1. **Key Exchange**: 256-bit AES key shared via URL hash fragment (`#k=base64url`)
+2. **Algorithm**: AES-GCM for authenticated encryption
+3. **Chunk Format**: `[12-byte IV][encrypted data]`
+4. **Key Properties**:
+   - Never sent to server (hash fragment not transmitted in HTTP)
+   - Unique per room session
+   - Base64url-encoded for URL safety
+
+**Note**: Server never sees the encryption key or decrypted content. All encryption/decryption happens client-side.
+
 ## Error Handling
 
 ### PeerConnection State Changes
@@ -157,17 +255,42 @@ Sender                                    Receiver
 | State | Action |
 |-------|--------|
 | `connected` | Cancel reconnection timer, update status |
-| `disconnected` | Arm reconnection timer |
+| `disconnected` | Arm reconnection timer (answerer), log event (offerer) |
 | `failed` | Reset PeerConnection, attempt reconnection |
 
 ### Stale Event Filtering
 
-All PeerConnection event handlers check `pcRef.current === pc` to ignore events from old/replaced connections.
+**Offerer**: PeerConnection event handlers check that the `pc` instance exists in `offererPeersRef.current` Map to ignore events from removed connections.
+
+**Answerer**: Event handlers check `pcRef.current === pc` to ignore events from old/replaced connections.
+
+### Duplicate Connection Prevention
+
+When a client reconnects with the same `cid` (Client ID):
+- Server closes existing WebSocket with that `cid`
+- New connection replaces the old one
+- Prevents duplicate connections from same user (e.g., after page reload)
 
 ## Files
 
+### Server-side
+
 | File | Description |
 |------|-------------|
-| `src/room.ts` | Server-side Durable Object (signaling server) |
-| `src/client/room.tsx` | Client-side WebRTC logic and UI |
 | `src/index.tsx` | Hono router, routes to Durable Object |
+| `src/room.ts` | Durable Object (signaling server) |
+
+### Client-side
+
+| File | Description |
+|------|-------------|
+| `src/client/room.tsx` | WebRTC connection logic and file transfer |
+| `src/client/home.tsx` | Home page interactive logic (room creation/join) |
+
+### UI Components (SSR)
+
+| File | Description |
+|------|-------------|
+| `src/ui/layout.tsx` | Layout shell component |
+| `src/ui/top.tsx` | Top page UI template |
+| `src/ui/room.tsx` | Room page UI template |
