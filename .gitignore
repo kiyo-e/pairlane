@@ -37,3 +37,4 @@ lerna-debug.log*
 !.dev.vars.example
 !.env.example
 .agents/execplans/*
+tmp/
