@@ -156,7 +156,7 @@ Summarize outcomes, remaining gaps, and lessons learned (at major milestones or 
 ## Context and Orientation
 
 Assume the reader knows nothing about this repo.
-- Describe key files and how requests flow (e.g., `src/index.ts` Hono app; Wrangler config file; scripts).
+- Describe key files and how requests flow (e.g., `src/index.tsx` Hono app; Wrangler config file; scripts).
 - Define any non-obvious term.
 
 ## Plan of Work

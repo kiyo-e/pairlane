@@ -3,8 +3,7 @@
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
-		"build": "npm run build:client && vite build",
-		"build:client": "vite build -c vite.client.config.ts",
+		"build": "vite build",
 		"deploy": "npm run build && wrangler deploy --minify",
 		"cf-typegen": "wrangler types --env-interface CloudflareBindings"
 	},
@@ -13,6 +12,7 @@
 		"hono": "^4.11.3"
 	},
 	"devDependencies": {
+		"vite-ssr-components": "^0.5.2",
 		"vite": "^7.2.0",
 		"wrangler": "^4.58.0"
 	}

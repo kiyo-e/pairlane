@@ -5,11 +5,11 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "share-files",
-	"main": "src/index.ts",
+	"main": "src/index.tsx",
 	"compatibility_date": "2026-01-07",
 	"assets": {
 		"binding": "ASSETS",
-		"directory": "./dist",
+		"directory": "./dist/client",
 		"run_worker_first": ["/", "/r/*", "/api/*", "/ws/*"]
 	},
 	"observability": {

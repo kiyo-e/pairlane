@@ -22,7 +22,7 @@ npm run cf-typegen
 Pass the `CloudflareBindings` as generics when instantiation `Hono`:
 
 ```ts
-// src/index.ts
+// src/index.tsx
 type Bindings = CloudflareBindings & { ROOM: DurableObjectNamespace }
 const app = new Hono<{ Bindings: Bindings }>()
 ```

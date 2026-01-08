@@ -3,14 +3,16 @@
  * See README.md for the flow overview; used by TopPage and RoomPage.
  */
 
+import { ViteClient } from "vite-ssr-components/hono";
+
 type LayoutProps = {
   title: string;
-  scripts: string[];
   children: any;
+  scripts?: any;
   bodyAttrs?: Record<string, string>;
 };
 
-export function Layout({ title, scripts, children, bodyAttrs = {} }: LayoutProps) {
+export function Layout({ title, children, scripts, bodyAttrs = {} }: LayoutProps) {
   return (
     <html lang="ja">
       <head>
@@ -18,6 +20,7 @@ export function Layout({ title, scripts, children, bodyAttrs = {} }: LayoutProps
         <meta name="viewport" content="width=device-width,initial-scale=1" />
         <meta name="theme-color" content="#f5f5f0" />
         <title>{title}</title>
+        <ViteClient />
         <link rel="stylesheet" href="/style.css" />
       </head>
       <body {...bodyAttrs}>
@@ -28,9 +31,7 @@ export function Layout({ title, scripts, children, bodyAttrs = {} }: LayoutProps
 
         <main class="container">{children}</main>
 
-        {scripts.map((src) => (
-          <script type="module" src={src}></script>
-        ))}
+        {scripts}
       </body>
     </html>
   );

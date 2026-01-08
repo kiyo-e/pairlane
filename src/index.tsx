@@ -8,30 +8,15 @@ type Bindings = CloudflareBindings & {
 };
 
 const app = new Hono<{ Bindings: Bindings }>();
-const isDev = import.meta.env?.DEV === true;
-
-const devScripts = {
-  home: ["/@vite/client", "/src/client/home.tsx"],
-  room: ["/@vite/client", "/src/client/room.tsx"],
-};
-
-const prodScripts = {
-  home: ["/assets/home.js"],
-  room: ["/assets/room.js"],
-};
-
-function pageScripts(page: "home" | "room") {
-  return isDev ? devScripts[page] : prodScripts[page];
-}
 
 app.use("*", jsxRenderer());
 
 app.get("/", (c) => {
-  return c.render(TopPage({ scripts: pageScripts("home") }));
+  return c.render(<TopPage />);
 });
 
 app.get("/r/:roomId", (c) => {
-  return c.render(RoomPage({ roomId: c.req.param("roomId"), scripts: pageScripts("room") }));
+  return c.render(<RoomPage roomId={c.req.param("roomId")} />);
 });
 
 app.post("/api/rooms", async (c) => {

@@ -142,7 +142,7 @@ function HomeApp() {
         </div>
       </div>
 
-      <div class="foot muted">P2Pのみ。ネットワーク条件によっては接続不可（TURN無し）</div>
+      <div class="foot muted">P2Pのみ。ネットワーク条件によっては接続不可</div>
     </section>
   );
 }

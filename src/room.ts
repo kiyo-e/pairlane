@@ -1,4 +1,4 @@
-// Design: see README.md for the P2P signaling flow; this Durable Object pairs with src/index.ts.
+// Design: see README.md for the P2P signaling flow; this Durable Object pairs with src/index.tsx.
 
 type Role = "offerer" | "answerer";
 
@@ -57,7 +57,7 @@ const DurableObjectBase =
   };
 
 export class Room extends DurableObjectBase {
-  // Design: README.md (multi-receiver queue); related: src/index.ts routes and src/client/room.tsx signaling.
+  // Design: README.md (multi-receiver queue); related: src/index.tsx routes and src/client/room.tsx signaling.
   private ctx: DurableObjectState;
   private config: RoomConfig | null = null;
   constructor(state: DurableObjectState, env: Bindings) {

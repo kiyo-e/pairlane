@@ -3,15 +3,15 @@
  * See README.md for the user flow; pairs with RoomPage and the home script.
  */
 
+import { Script } from "vite-ssr-components/hono";
 import { Layout } from "./layout";
 
-type TopPageProps = {
-  scripts: string[];
-};
-
-export function TopPage({ scripts }: TopPageProps) {
+export function TopPage() {
   return (
-    <Layout title="SHARE-FILES" scripts={scripts}>
+    <Layout
+      title="SHARE-FILES"
+      scripts={<Script src="/src/client/home.tsx" />}
+    >
       <section id="homeView" class="card home">
         <div class="homeGrid">
           <div class="homeHero">
@@ -62,7 +62,7 @@ export function TopPage({ scripts }: TopPageProps) {
         </div>
 
         <div class="foot muted">
-          P2Pのみ。ネットワーク条件によっては接続不可（TURN無し）
+          P2Pのみ。ネットワーク条件によっては接続不可
         </div>
       </section>
     </Layout>

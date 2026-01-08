@@ -1,7 +1,7 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-- `src/index.ts` contains the Cloudflare Worker entrypoint and Hono routes.
+- `src/index.tsx` contains the Cloudflare Worker entrypoint and Hono routes.
 - `public/` holds static assets served via the Wrangler `assets` binding.
 - `wrangler.jsonc` defines the Worker name, compatibility date, and asset directory.
 - `worker-configuration.d.ts` provides generated type bindings for Cloudflare resources.
@@ -14,7 +14,7 @@
 
 ## Coding Style & Naming Conventions
 - TypeScript is the primary language; keep code in `src/`.
-- Use 2-space indentation and double quotes for strings (match `src/index.ts`).
+- Use 2-space indentation and double quotes for strings (match `src/index.tsx`).
 - Prefer concise, descriptive route names (e.g., `/message`).
 - No formatter or linter is configured; keep diffs consistent with existing style.
 

@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import { cloudflare } from "@cloudflare/vite-plugin";
+import ssrPlugin from "vite-ssr-components/plugin";
 
 export default defineConfig(({ command }) => ({
   plugins: [
@@ -13,10 +14,7 @@ export default defineConfig(({ command }) => ({
         };
       },
     }),
+    ssrPlugin(),
   ],
   publicDir: "public",
-  build: {
-    outDir: "dist-worker",
-    emptyOutDir: true,
-  },
 }));

@@ -170,4 +170,4 @@ All PeerConnection event handlers check `pcRef.current === pc` to ignore events 
 |------|-------------|
 | `src/room.ts` | Server-side Durable Object (signaling server) |
 | `src/client/room.tsx` | Client-side WebRTC logic and UI |
-| `src/index.ts` | Hono router, routes to Durable Object |
+| `src/index.tsx` | Hono router, routes to Durable Object |
