@@ -529,6 +529,9 @@ function RoomApp({ roomId, maxConcurrent }: RoomAppProps) {
 
         if (msg.type === "start") {
           if (roleRef.current === "offerer" && msg.peerId) {
+            if (offererPeersRef.current.has(msg.peerId)) {
+              closeOffererPeer(msg.peerId);
+            }
             const peer = createOffererPeer(msg.peerId);
             await sendOffer(peer);
             return;

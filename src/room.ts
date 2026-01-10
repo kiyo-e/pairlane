@@ -104,8 +104,6 @@ export class Room extends DurableObjectBase {
     const clientId = url.searchParams.get("cid") ?? crypto.randomUUID();
 
     log("[room] new connection, cid:", clientId, "current sockets:", this.ctx.getWebSockets().length);
-    this.closeDuplicateClient(clientId);
-    log("[room] after closeDuplicate, sockets:", this.ctx.getWebSockets().length);
     const role = this.pickRole(clientId);
     log("[room] assigned role:", role, "to cid:", clientId);
 
@@ -122,9 +120,12 @@ export class Room extends DurableObjectBase {
     this.ctx.acceptWebSocket(server);
     server.serializeAttachment(attachment);
 
-    server.send(JSON.stringify({ type: "role", role, cid: clientId } satisfies ServerToClient));
+    this.closeDuplicateClient(clientId, server);
+    log("[room] after closeDuplicate, sockets:", this.ctx.getWebSockets().length);
+
+    this.sendJson(server, { type: "role", role, cid: clientId });
     if (role === "answerer") {
-      server.send(JSON.stringify({ type: "wait" } satisfies ServerToClient));
+      this.sendJson(server, { type: "wait" });
     }
 
     this.broadcastPeers();
@@ -183,7 +184,7 @@ export class Room extends DurableObjectBase {
             ? { type: "answer", from: attachment.cid, sid: msg.sid, sdp: msg.sdp }
             : { type: "candidate", from: attachment.cid, sid: msg.sid, candidate: msg.candidate };
 
-      target.send(JSON.stringify(payload satisfies ServerToClient));
+      this.sendJson(target, payload);
     }
   }
 
@@ -192,21 +193,31 @@ export class Room extends DurableObjectBase {
     log("[room] webSocketClose, cid:", attachment?.cid, "role:", attachment?.role);
 
     if (attachment?.role === "answerer") {
+      const hasReplacement = attachment.cid && this.hasOpenSocket(attachment.cid, "answerer");
+      if (hasReplacement) {
+        this.broadcastPeers();
+        return;
+      }
       if (attachment.cid) {
         this.activePairs.delete(attachment.cid);
       }
       const offerer = this.getOffererSocket();
       if (offerer && attachment.cid) {
-        offerer.send(JSON.stringify({ type: "peer-left", peerId: attachment.cid } satisfies ServerToClient));
+        this.sendJson(offerer, { type: "peer-left", peerId: attachment.cid });
       }
       this.fillSlots();
     }
 
     if (attachment?.role === "offerer") {
+      const hasReplacement = attachment.cid && this.hasOpenSocket(attachment.cid, "offerer");
+      if (hasReplacement) {
+        this.broadcastPeers();
+        return;
+      }
       this.activePairs.clear();
       for (const socket of this.answererSockets()) {
         this.setAnswererState(socket, "waiting");
-        socket.send(JSON.stringify({ type: "wait" } satisfies ServerToClient));
+        this.sendJson(socket, { type: "wait" });
       }
     }
 
@@ -232,9 +243,9 @@ export class Room extends DurableObjectBase {
   }
 
   private broadcastPeers() {
-    const count = this.ctx.getWebSockets().length;
-    const payload = JSON.stringify({ type: "peers", count } satisfies ServerToClient);
-    for (const socket of this.ctx.getWebSockets()) socket.send(payload);
+    const sockets = this.openSockets();
+    const payload = JSON.stringify({ type: "peers", count: sockets.length } satisfies ServerToClient);
+    for (const socket of sockets) this.sendText(socket, payload);
   }
 
   private pickRole(clientId: string) {
@@ -248,7 +259,7 @@ export class Room extends DurableObjectBase {
   }
 
   private getOffererSocket() {
-    for (const socket of this.ctx.getWebSockets()) {
+    for (const socket of this.openSockets()) {
       const attachment = socket.deserializeAttachment() as SocketAttachment | null;
       if (attachment?.role === "offerer") return socket;
     }
@@ -257,7 +268,7 @@ export class Room extends DurableObjectBase {
 
   private answererSockets() {
     const out: WebSocket[] = [];
-    for (const socket of this.ctx.getWebSockets()) {
+    for (const socket of this.openSockets()) {
       const attachment = socket.deserializeAttachment() as SocketAttachment | null;
       if (attachment?.role === "answerer") out.push(socket);
     }
@@ -265,7 +276,7 @@ export class Room extends DurableObjectBase {
   }
 
   private socketByCid(cid: string) {
-    for (const socket of this.ctx.getWebSockets()) {
+    for (const socket of this.openSockets()) {
       const attachment = socket.deserializeAttachment() as SocketAttachment | null;
       if (attachment?.cid === cid) return socket;
     }
@@ -315,18 +326,45 @@ export class Room extends DurableObjectBase {
       if (attachment.cid) {
         this.activePairs.set(attachment.cid, offererCid);
       }
-      socket.send(JSON.stringify({ type: "start" } satisfies ServerToClient));
-      offerer.send(JSON.stringify({ type: "start", peerId: attachment.cid } satisfies ServerToClient));
+      this.sendJson(socket, { type: "start" });
+      this.sendJson(offerer, { type: "start", peerId: attachment.cid });
     }
   }
 
-  private closeDuplicateClient(clientId: string) {
+  private closeDuplicateClient(clientId: string, keepSocket?: WebSocket) {
     for (const socket of this.ctx.getWebSockets()) {
+      if (keepSocket && socket === keepSocket) continue;
       const attachment = socket.deserializeAttachment() as SocketAttachment | null;
       if (attachment?.cid === clientId) {
         log("[room] closing duplicate client, cid:", clientId, "role:", attachment.role);
-        socket.close(1000, "replaced");
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.close(1000, "replaced");
+        }
       }
     }
+  }
+
+  private openSockets() {
+    return this.ctx.getWebSockets().filter((socket) => socket.readyState === WebSocket.OPEN);
+  }
+
+  private hasOpenSocket(cid: string, role?: Role) {
+    for (const socket of this.openSockets()) {
+      const attachment = socket.deserializeAttachment() as SocketAttachment | null;
+      if (!attachment || attachment.cid !== cid) continue;
+      if (role && attachment.role !== role) continue;
+      return true;
+    }
+    return false;
+  }
+
+  private sendJson(socket: WebSocket, payload: ServerToClient) {
+    if (socket.readyState !== WebSocket.OPEN) return;
+    socket.send(JSON.stringify(payload));
+  }
+
+  private sendText(socket: WebSocket, payload: string) {
+    if (socket.readyState !== WebSocket.OPEN) return;
+    socket.send(payload);
   }
 }
