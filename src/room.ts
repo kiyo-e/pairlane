@@ -66,6 +66,7 @@ export class Room extends DurableObjectBase {
   // Design: README.md (multi-receiver queue); related: src/index.tsx routes and src/client/room.tsx signaling.
   private ctx: DurableObjectState;
   private config: RoomConfig | null = null;
+  private activePairs = new Map<string, string>();
   constructor(state: DurableObjectState, env: Bindings) {
     super(state, env);
     this.ctx = state;
@@ -150,11 +151,29 @@ export class Room extends DurableObjectBase {
       if (peerSocket) {
         this.setAnswererState(peerSocket, "done");
       }
+      this.activePairs.delete(msg.peerId);
       this.fillSlots();
       return;
     }
 
     if (msg.type === "offer" || msg.type === "answer" || msg.type === "candidate") {
+      if (msg.type === "offer") {
+        if (attachment.role !== "offerer") return;
+        if (this.activePairs.get(msg.to) !== attachment.cid) return;
+      }
+      if (msg.type === "answer") {
+        if (attachment.role !== "answerer") return;
+        if (this.activePairs.get(attachment.cid) !== msg.to) return;
+      }
+      if (msg.type === "candidate") {
+        if (attachment.role === "offerer") {
+          if (this.activePairs.get(msg.to) !== attachment.cid) return;
+        } else if (attachment.role === "answerer") {
+          if (this.activePairs.get(attachment.cid) !== msg.to) return;
+        } else {
+          return;
+        }
+      }
       const target = this.socketByCid(msg.to);
       if (!target) return;
 
@@ -174,6 +193,9 @@ export class Room extends DurableObjectBase {
     log("[room] webSocketClose, cid:", attachment?.cid, "role:", attachment?.role);
 
     if (attachment?.role === "answerer") {
+      if (attachment.cid) {
+        this.activePairs.delete(attachment.cid);
+      }
       const offerer = this.getOffererSocket();
       if (offerer && attachment.cid) {
         offerer.send(JSON.stringify({ type: "peer-left", peerId: attachment.cid } satisfies ServerToClient));
@@ -182,6 +204,7 @@ export class Room extends DurableObjectBase {
     }
 
     if (attachment?.role === "offerer") {
+      this.activePairs.clear();
       for (const socket of this.answererSockets()) {
         this.setAnswererState(socket, "waiting");
         socket.send(JSON.stringify({ type: "wait" } satisfies ServerToClient));
@@ -260,6 +283,9 @@ export class Room extends DurableObjectBase {
   private fillSlots() {
     const offerer = this.getOffererSocket();
     if (!offerer) return;
+    const offererAttachment = offerer.deserializeAttachment() as SocketAttachment | null;
+    const offererCid = offererAttachment?.cid;
+    if (!offererCid) return;
 
     const maxConcurrent = this.config?.maxConcurrent ?? DEFAULT_MAX_CONCURRENT;
 
@@ -287,6 +313,9 @@ export class Room extends DurableObjectBase {
       const attachment = socket.deserializeAttachment() as SocketAttachment | null;
       if (!attachment) continue;
       this.setAnswererState(socket, "active");
+      if (attachment.cid) {
+        this.activePairs.set(attachment.cid, offererCid);
+      }
       socket.send(JSON.stringify({ type: "start" } satisfies ServerToClient));
       offerer.send(JSON.stringify({ type: "start", peerId: attachment.cid } satisfies ServerToClient));
     }

@@ -6,6 +6,7 @@ import { detectLocale, getTranslations, supportedLocales, type Locale } from "./
 
 type Bindings = CloudflareBindings & {
   ROOM: DurableObjectNamespace;
+  ROOM_RATE_LIMITER: RateLimit;
 };
 
 const app = new Hono<{ Bindings: Bindings }>();
@@ -19,6 +20,17 @@ function normalizeMaxConcurrent(value?: number) {
   const base = Number.isFinite(value) ? Math.floor(value!) : DEFAULT_MAX_CONCURRENT;
   return Math.min(MAX_MAX_CONCURRENT, Math.max(1, base));
 }
+
+app.use("/api/rooms", async (c, next) => {
+  if (c.req.method !== "POST") return next();
+  const ip = c.req.header("cf-connecting-ip") ?? "unknown";
+  const key = `create-room:${ip}`;
+  const outcome = await c.env.ROOM_RATE_LIMITER.limit({ key });
+  if (!outcome.success) {
+    return c.text("Rate limit exceeded", 429);
+  }
+  return next();
+});
 
 function getLocaleFromRequest(c: { req: { header: (name: string) => string | undefined; query: (name: string) => string | undefined } }): Locale {
   // Check query parameter first (for language switcher)
