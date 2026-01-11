@@ -104,6 +104,8 @@ export class Room extends DurableObjectBase {
     const clientId = url.searchParams.get("cid") ?? crypto.randomUUID();
 
     log("[room] new connection, cid:", clientId, "current sockets:", this.ctx.getWebSockets().length);
+    this.closeDuplicateClient(clientId);
+    log("[room] after closeDuplicate, sockets:", this.ctx.getWebSockets().length);
     const role = this.pickRole(clientId);
     log("[room] assigned role:", role, "to cid:", clientId);
 
@@ -119,9 +121,6 @@ export class Room extends DurableObjectBase {
 
     this.ctx.acceptWebSocket(server);
     server.serializeAttachment(attachment);
-
-    this.closeDuplicateClient(clientId, server);
-    log("[room] after closeDuplicate, sockets:", this.ctx.getWebSockets().length);
 
     this.sendJson(server, { type: "role", role, cid: clientId });
     if (role === "answerer") {
