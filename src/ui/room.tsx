@@ -1,5 +1,5 @@
 /**
- * Room page UI for share-files.
+ * Room page UI for Pairlane.
  * See README.md for the flow; pairs with the Room Durable Object and room script.
  */
 
@@ -52,15 +52,15 @@ export function RoomPage({ roomId, maxConcurrent, t, locale }: RoomPageProps) {
 
           <div class="roomMain">
             <div class="stepGuide waiting">
-              <div class="stepLabel">{initialStepLabel}</div>
-              <div class="stepMain">{t.guide.receiverConnecting}</div>
-              <div class="stepSub">{t.guide.receiverConnectingSub}</div>
               <div class="stepProgress">
                 <div class="stepDot current"></div>
                 <div class="stepDot"></div>
                 <div class="stepDot"></div>
                 <div class="stepDot"></div>
               </div>
+              <div class="stepLabel">{initialStepLabel}</div>
+              <div class="stepMain">{t.guide.receiverConnecting}</div>
+              <div class="stepSub">{t.guide.receiverConnectingSub}</div>
             </div>
 
             <div id="senderPane" class="pane hidden">

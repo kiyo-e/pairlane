@@ -546,7 +546,7 @@ input[type="checkbox"] {
 .stepProgress {
   display: flex;
   gap: 4px;
-  margin-top: 16px;
+  margin-bottom: 12px;
 }
 
 .stepDot {
@@ -731,10 +731,33 @@ input[type="checkbox"] {
 }
 
 @media (max-width: 600px) {
+  /* Compact site header on mobile */
   .topbar {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
+    flex-direction: row;
+    align-items: center;
+    padding: 8px 16px;
+    gap: 8px;
+  }
+
+  .topbar .brand {
+    font-size: 16px;
+  }
+
+  .topbar .sub {
+    display: none;
+  }
+
+  .topbar .langSwitcher {
+    margin-left: auto;
+  }
+
+  .topbar .langBtn {
+    padding: 4px 8px;
+    font-size: 10px;
+  }
+
+  .container {
+    padding: 16px;
   }
 
   .homeHero,
@@ -761,5 +784,228 @@ input[type="checkbox"] {
 
   h2 {
     font-size: 28px;
+  }
+}
+
+/* ===== Receiver Mode Styles ===== */
+
+/* Compact header for receiver */
+.roomHeader.compact {
+  padding: 16px 24px;
+  border-bottom: var(--border);
+}
+
+.roomIdCompact {
+  margin: 4px 0;
+}
+
+/* Receiver layout: no sidebar column */
+.roomGrid.receiverLayout {
+  grid-template-columns: 1fr;
+}
+
+/* Compact inline sidebar for receiver */
+.roomSideCompact {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 24px;
+  border-bottom: var(--border);
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.sideDot {
+  width: 4px;
+  height: 4px;
+  background: var(--gray);
+  border-radius: 50%;
+}
+
+/* Receiver step guide: larger and more prominent */
+.stepGuide.receiverGuide {
+  padding: 32px;
+  text-align: center;
+}
+
+.stepGuide.receiverGuide .stepProgress {
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.stepGuide.receiverGuide .stepDot {
+  width: 32px;
+  height: 6px;
+}
+
+.stepGuide.receiverGuide .stepLabel {
+  margin-bottom: 12px;
+}
+
+.stepGuide.receiverGuide .stepMain {
+  font-size: 36px;
+}
+
+.stepGuide.receiverGuide .stepSub {
+  font-size: 14px;
+  margin-top: 12px;
+  max-width: 320px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Receiver pane centered */
+.receiverMode .roomMain {
+  padding: 24px;
+}
+
+.receiverMode #receiverPane {
+  text-align: center;
+  padding: 24px 0;
+}
+
+.receiverMode #receiverPane .muted {
+  font-size: 14px;
+}
+
+.receiverMode #downloadArea {
+  flex-direction: column;
+  text-align: center;
+  padding: 32px;
+}
+
+.receiverMode #downloadArea .btn {
+  width: 100%;
+  max-width: 280px;
+  justify-content: center;
+}
+
+/* ===== Sender Mode: Mobile/Desktop Toggle ===== */
+
+/* Desktop: show full layout, hide mobile elements */
+.senderHeaderMobile,
+.senderSideMobile {
+  display: none;
+}
+
+.senderHeaderDesktop,
+.senderSideDesktop {
+  display: flex;
+}
+
+.senderSideDesktop {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Sender mobile layout */
+.senderMode .roomGrid {
+  grid-template-columns: 280px 1fr;
+}
+
+/* Small button style */
+.btnSmall {
+  padding: 8px 12px;
+  font-size: 10px;
+}
+
+/* Mobile: sender compact layout */
+@media (max-width: 600px) {
+  /* Hide desktop elements, show mobile elements */
+  .senderHeaderDesktop,
+  .senderSideDesktop {
+    display: none !important;
+  }
+
+  .senderHeaderMobile,
+  .senderSideMobile {
+    display: flex !important;
+  }
+
+  /* Sender uses single column on mobile */
+  .senderMode .roomGrid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Sender step guide: compact on mobile */
+  .senderMode .stepGuide {
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+
+  .senderMode .stepGuide .stepMain {
+    font-size: 24px;
+  }
+
+  .senderMode .stepGuide .stepSub {
+    font-size: 11px;
+    margin-top: 4px;
+  }
+
+  .senderMode .stepGuide .stepProgress {
+    margin-bottom: 8px;
+  }
+
+  .senderMode .stepGuide .stepLabel {
+    margin-bottom: 4px;
+  }
+
+  /* Drop zone: mobile optimized */
+  .senderMode .drop {
+    padding: 24px 16px;
+  }
+
+  .senderMode .dropTitle {
+    font-size: 18px;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .senderMode .drop .btn {
+    width: 100%;
+    justify-content: center;
+    padding: 16px;
+  }
+
+  /* Room main padding */
+  .senderMode .roomMain {
+    padding: 16px;
+  }
+
+  /* Send button row */
+  .senderMode .row.gap.wrap {
+    flex-direction: column;
+  }
+
+  .senderMode .row.gap.wrap .btn.primary {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* Mobile receiver: even more compact */
+@media (max-width: 600px) {
+  .roomHeader.compact {
+    padding: 12px 16px;
+  }
+
+  .roomSideCompact {
+    padding: 10px 16px;
+    font-size: 11px;
+  }
+
+  .stepGuide.receiverGuide {
+    padding: 24px 16px;
+  }
+
+  .stepGuide.receiverGuide .stepMain {
+    font-size: 22px;
+  }
+
+  .stepGuide.receiverGuide .stepSub {
+    font-size: 12px;
+  }
+
+  .receiverMode .roomMain {
+    padding: 16px;
   }
 }

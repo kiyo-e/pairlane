@@ -1,8 +1,8 @@
-# Share Files
+# Pairlane
 
 [English](./README.md) | [日本語](./README.ja.md)
 
-**在线演示: https://share-files.karakuri-maker.com/**
+**在线演示: https://getpairlane.com/**
 
 基于WebRTC的P2P文件共享工具。无需经过服务器，直接在浏览器之间传输文件。
 
@@ -41,6 +41,15 @@
 
 通过GitHub Actions，在向 `cli/` 目录push/PR时自动测试构建。
 
+### npx快速开始
+
+```sh
+npx pairlane send /path/to/file
+npx pairlane receive <ROOM_ID_OR_URL> --output-dir ./downloads
+```
+
+### 从源码构建
+
 ```sh
 cd cli
 cargo run --release -- send /path/to/file
@@ -50,8 +59,8 @@ cargo run --release -- receive <ROOM_ID_OR_URL> --output-dir ./downloads
 `send` 默认启用加密。`send` 输出的带有 `#k=...` 的URL可以直接传给 `receive`：
 
 ```sh
-cargo run --release -- send /path/to/file
-cargo run --release -- receive "https://share-files.karakuri-maker.com/r/ROOM#k=..."
+npx pairlane send /path/to/file
+npx pairlane receive "https://getpairlane.com/r/ROOM#k=..."
 ```
 
 要禁用加密，请使用 `--no-encrypt`。
@@ -59,18 +68,18 @@ cargo run --release -- receive "https://share-files.karakuri-maker.com/r/ROOM#k=
 如需显式指定解密密钥，请向 `receive` 传递 `--key`（base64url编码）：
 
 ```sh
-cargo run --release -- receive <ROOM_ID> --key <BASE64URL_KEY> --output-dir ./downloads
+npx pairlane receive <ROOM_ID> --key <BASE64URL_KEY> --output-dir ./downloads
 ```
 
 默认情况下，`send` 和 `receive` 在传输成功后会退出。如需保持运行以进行更多传输，请使用 `--stay-open`。
 
 ※ 包含 `#k=...` 的URL在shell中需要用引号包裹。传统的 `--file` / `--room-id` 参数仍然可用。
 
-默认连接到演示环境。可通过 `SHARE_FILES_ENDPOINT` 环境变量覆盖：
+默认连接到演示环境。可通过 `PAIRLANE_ENDPOINT` 环境变量覆盖（旧 `SHARE_FILES_ENDPOINT` 也可用）：
 
 ```sh
-SHARE_FILES_ENDPOINT=https://share-files.karakuri-maker.com \
-  cargo run --release -- send /path/to/file
+PAIRLANE_ENDPOINT=https://getpairlane.com \
+  npx pairlane send /path/to/file
 ```
 
 如需加入现有房间，请显式指定 `--room-id`。

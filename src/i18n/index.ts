@@ -1,5 +1,5 @@
 /**
- * Simple i18n module for share-files.
+ * Simple i18n module for Pairlane.
  * Supports: ja, en, zh
  */
 

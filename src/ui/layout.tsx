@@ -1,5 +1,5 @@
 /**
- * Layout shell for share-files pages.
+ * Layout shell for Pairlane pages.
  * See README.md for the flow overview; used by TopPage and RoomPage.
  */
 

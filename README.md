@@ -1,8 +1,8 @@
-# Share Files
+# Pairlane
 
 [日本語](./README.ja.md) | [中文](./README.zh.md)
 
-**Live Demo: https://share-files.karakuri-maker.com/**
+**Live Demo: https://getpairlane.com/**
 
 A P2P file sharing tool using WebRTC. Transfer files directly between browsers without going through a server.
 
@@ -41,6 +41,15 @@ The `cli/` directory contains a Rust-based CLI that can send or receive files us
 
 Builds are automatically tested via GitHub Actions on push/PR to the `cli/` directory.
 
+### Quick Start (npx)
+
+```sh
+npx pairlane send /path/to/file
+npx pairlane receive <ROOM_ID_OR_URL> --output-dir ./downloads
+```
+
+### Build from source
+
 ```sh
 cd cli
 cargo run --release -- send /path/to/file
@@ -50,8 +59,8 @@ cargo run --release -- receive <ROOM_ID_OR_URL> --output-dir ./downloads
 Encrypted transfers are enabled by default for `send`. The command prints a room URL with `#k=...` that you can pass directly to `receive`:
 
 ```sh
-cargo run --release -- send /path/to/file
-cargo run --release -- receive "https://share-files.karakuri-maker.com/r/ROOM#k=..."
+npx pairlane send /path/to/file
+npx pairlane receive "https://getpairlane.com/r/ROOM#k=..."
 ```
 
 To disable encryption for `send`, pass `--no-encrypt`.
@@ -59,18 +68,18 @@ To disable encryption for `send`, pass `--no-encrypt`.
 If you want to provide the decryption key explicitly, pass `--key` (base64url) to `receive`:
 
 ```sh
-cargo run --release -- receive <ROOM_ID> --key <BASE64URL_KEY> --output-dir ./downloads
+npx pairlane receive <ROOM_ID> --key <BASE64URL_KEY> --output-dir ./downloads
 ```
 
 By default, `send` and `receive` exit after a successful transfer. Use `--stay-open` to keep the process running for additional transfers.
 
 Note: URLs with `#k=...` should be quoted in the shell. Legacy flags `--file` and `--room-id` are still accepted.
 
-By default it connects to the demo endpoint. Override it with the `SHARE_FILES_ENDPOINT` environment variable:
+By default it connects to the demo endpoint. Override it with the `PAIRLANE_ENDPOINT` environment variable (legacy `SHARE_FILES_ENDPOINT` also supported):
 
 ```sh
-SHARE_FILES_ENDPOINT=https://share-files.karakuri-maker.com \
-  cargo run --release -- send /path/to/file
+PAIRLANE_ENDPOINT=https://getpairlane.com \
+  npx pairlane send /path/to/file
 ```
 
 You can also provide `--room-id` explicitly if you want to join an existing room.

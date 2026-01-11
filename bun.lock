@@ -3,7 +3,7 @@
   "configVersion": 0,
   "workspaces": {
     "": {
-      "name": "share-files",
+      "name": "pairlane",
       "dependencies": {
         "@cloudflare/vite-plugin": "^1.20.0",
         "hono": "^4.11.3",

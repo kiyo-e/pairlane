@@ -4,7 +4,7 @@
  */
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "share-files",
+	"name": "pairlane",
 	"main": "src/index.tsx",
 	"compatibility_date": "2026-01-07",
 	"assets": {

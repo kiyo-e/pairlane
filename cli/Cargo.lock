@@ -1284,6 +1284,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "pairlane-cli"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm",
+ "anyhow",
+ "base64 0.22.1",
+ "bytes",
+ "chrono",
+ "clap",
+ "futures-util",
+ "getrandom 0.2.16",
+ "mime_guess",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-tungstenite",
+ "url",
+ "uuid",
+ "webrtc",
+]
+
+[[package]]
 name = "parking_lot"
 version = "0.12.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1917,29 +1940,6 @@ dependencies = [
  "cfg-if",
  "cpufeatures",
  "digest",
-]
-
-[[package]]
-name = "share-files-cli"
-version = "0.1.0"
-dependencies = [
- "aes-gcm",
- "anyhow",
- "base64 0.22.1",
- "bytes",
- "chrono",
- "clap",
- "futures-util",
- "getrandom 0.2.16",
- "mime_guess",
- "reqwest",
- "serde",
- "serde_json",
- "tokio",
- "tokio-tungstenite",
- "url",
- "uuid",
- "webrtc",
 ]
 
 [[package]]

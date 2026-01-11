@@ -1,5 +1,5 @@
 {
-	"name": "share-files",
+	"name": "pairlane",
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",

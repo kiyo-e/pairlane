@@ -1,5 +1,5 @@
 /**
- * Top page UI for share-files.
+ * Top page UI for Pairlane.
  * See README.md for the user flow; pairs with RoomPage and the home script.
  */
 

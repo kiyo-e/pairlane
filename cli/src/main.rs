@@ -42,9 +42,10 @@ const AES_NONCE_LEN: usize = 12;
 const AES_TAG_LEN: usize = 16;
 const MAX_FRAME_SIZE: usize = 16 * 1024;
 
+// Design: see README.md and docs/signaling-protocol.md; related to Command and transfer helpers below.
 #[derive(Parser, Debug)]
-#[command(name = "share-files-cli")]
-#[command(about = "P2P file transfer CLI for share-files")]
+#[command(name = "pairlane")]
+#[command(about = "P2P file transfer CLI for Pairlane")]
 struct Cli {
   #[command(subcommand)]
   command: Command,
@@ -1030,8 +1031,10 @@ fn build_room_url_with_key(endpoint: Option<&str>, room_id: &str, key: Option<&[
 }
 
 fn base_endpoint_url(endpoint: Option<&str>) -> Result<Url> {
-  let default_endpoint = "https://share-files.karakuri-maker.com";
-  let env_endpoint = env::var("SHARE_FILES_ENDPOINT").ok();
+  let default_endpoint = "https://getpairlane.com";
+  let env_endpoint = env::var("PAIRLANE_ENDPOINT")
+    .ok()
+    .or_else(|| env::var("SHARE_FILES_ENDPOINT").ok());
   let endpoint = endpoint
     .map(|value| value.to_string())
     .or(env_endpoint)

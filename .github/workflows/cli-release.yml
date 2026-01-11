@@ -1,0 +1,50 @@
+name: Release CLI
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    name: Build CLI (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: macos-latest
+            target: x86_64-apple-darwin
+          - os: macos-latest
+            target: aarch64-apple-darwin
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Add target
+        if: matrix.target != 'x86_64-unknown-linux-gnu'
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Build
+        working-directory: cli
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Package
+        working-directory: cli
+        run: |
+          VERSION=$(grep '^version = ' Cargo.toml | head -1 | sed -E 's/version = "(.*)"/\1/')
+          BIN_PATH="target/${{ matrix.target }}/release/pairlane"
+          ASSET="pairlane-${VERSION}-${{ matrix.target }}.tar.gz"
+          tar -czf "$ASSET" -C "$(dirname "$BIN_PATH")" pairlane
+          echo "ASSET=$ASSET" >> $GITHUB_ENV
+
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: cli/${{ env.ASSET }}
