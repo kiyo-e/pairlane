@@ -1,0 +1,31 @@
+{
+  "name": "pairlane",
+  "version": "0.1.0",
+  "description": "P2P file transfer CLI for Pairlane",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kiyo-e/p2p-share-files.git"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "bin": {
+    "pairlane": "bin/pairlane"
+  },
+  "files": [
+    "bin/",
+    "scripts/"
+  ],
+  "os": [
+    "darwin",
+    "linux"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "scripts": {
+    "postinstall": "node scripts/postinstall.js"
+  }
+}

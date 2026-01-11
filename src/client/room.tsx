@@ -1,6 +1,6 @@
 /** @jsxImportSource hono/jsx/dom */
 /**
- * Room client app for share-files.
+ * Room client app for Pairlane.
  * See README.md; pairs with src/ui/room.tsx.
  */
 

@@ -1,5 +1,5 @@
 /**
- * Room page UI for share-files.
+ * Room page UI for Pairlane.
  * See README.md for the flow; pairs with the Room Durable Object and room script.
  */
 

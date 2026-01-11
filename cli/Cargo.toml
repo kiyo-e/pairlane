@@ -1,7 +1,11 @@
 [package]
-name = "share-files-cli"
+name = "pairlane-cli"
 version = "0.1.0"
 edition = "2021"
+
+[[bin]]
+name = "pairlane"
+path = "src/main.rs"
 
 [dependencies]
 aes-gcm = "0.10"

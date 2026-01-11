@@ -1,6 +1,6 @@
 /** @jsxImportSource hono/jsx/dom */
 /**
- * Home client app for share-files.
+ * Home client app for Pairlane.
  * See README.md; pairs with src/ui/top.tsx.
  */
 

@@ -1,0 +1,20 @@
+#!/usr/bin/env node
+
+const { spawnSync } = require("node:child_process");
+const { existsSync } = require("node:fs");
+const { join } = require("node:path");
+
+const binaryPath = join(__dirname, "..", "dist", "pairlane");
+
+if (!existsSync(binaryPath)) {
+  console.error("pairlane: binary not found. Reinstall to download the CLI.");
+  process.exit(1);
+}
+
+const result = spawnSync(binaryPath, process.argv.slice(2), { stdio: "inherit" });
+if (result.error) {
+  console.error("pairlane: failed to launch the CLI binary.");
+  process.exit(1);
+}
+
+process.exit(result.status ?? 1);

@@ -1,5 +1,5 @@
 /**
- * Client-side i18n helpers for share-files.
+ * Client-side i18n helpers for Pairlane.
  * Uses translations injected by the server via window.__TRANSLATIONS__
  */
 
