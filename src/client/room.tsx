@@ -774,38 +774,53 @@ function RoomApp({ roomId, maxConcurrent }: RoomAppProps) {
     .replace("{total}", "4");
 
   return (
-    <section id="roomView" class={`card room${showReceiver ? " receiverMode" : ""}`}>
-      <div class={`roomHeader${showReceiver ? " compact" : ""}`}>
-        <div class="roomTitle">
-          <div class="eyebrow">{t.room.eyebrow}</div>
-          {showReceiver ? (
-            <div class="roomIdCompact">
-              <span class="mono muted small">{t.room.roomLabel} {roomId}</span>
-            </div>
-          ) : (
+    <section id="roomView" class={`card room${showReceiver ? " receiverMode" : " senderMode"}`}>
+      {/* Desktop header for sender */}
+      {showSender && (
+        <div class="roomHeader senderHeaderDesktop">
+          <div class="roomTitle">
+            <div class="eyebrow">{t.room.eyebrow}</div>
             <h2>
               {t.room.roomLabel} <span id="roomIdLabel" class="mono">{roomId}</span>
             </h2>
-          )}
-          <div id="status" class="status">{status}</div>
-        </div>
-        {showSender && (
+            <div id="status" class="status">{status}</div>
+          </div>
           <div class="right">
             <button id="copyLinkBtn" class="btn" onClick={handleCopyLink} title={t.room.copyLinkHint}>{t.room.copyLink}</button>
             <button id="copyCodeBtn" class="btn" onClick={handleCopyCode} title={t.room.copyCodeHint}>{t.room.copyCode}</button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+      {/* Mobile header for sender */}
+      {showSender && (
+        <div class="roomHeader compact senderHeaderMobile">
+          <div class="roomTitle">
+            <div class="roomIdCompact">
+              <span class="mono muted small">{t.room.roomLabel} {roomId}</span>
+            </div>
+          </div>
+          <div class="right">
+            <button class="btn btnSmall" onClick={handleCopyLink} title={t.room.copyLinkHint}>{t.room.copyLink}</button>
+          </div>
+        </div>
+      )}
+      {/* Receiver header */}
+      {showReceiver && (
+        <div class="roomHeader compact">
+          <div class="roomTitle">
+            <div class="eyebrow">{t.room.eyebrow}</div>
+            <div class="roomIdCompact">
+              <span class="mono muted small">{t.room.roomLabel} {roomId}</span>
+            </div>
+            <div id="status" class="status">{status}</div>
+          </div>
+        </div>
+      )}
 
       <div class={`roomGrid${showReceiver ? " receiverLayout" : ""}`}>
-        {showReceiver ? (
-          <div class="roomSideCompact">
-            <span class="muted small">{roleLabel}</span>
-            <span class="sideDot"></span>
-            <span class="muted small">{t.room.peersLabel} {peersLabel}</span>
-          </div>
-        ) : (
-          <div class="roomSide">
+        {/* Desktop sidebar for sender */}
+        {showSender && (
+          <div class="roomSide senderSideDesktop">
             <div class="kv">
               <div class="k">{t.room.roleLabel}</div>
               <div class="v" id="roleLabel">{roleLabel}</div>
@@ -814,6 +829,22 @@ function RoomApp({ roomId, maxConcurrent }: RoomAppProps) {
             </div>
             <div class="sideCard muted small">{t.room.encryptHint}</div>
             <div class="sideCard muted small">{maxConcurrentLabel}</div>
+          </div>
+        )}
+        {/* Mobile compact sidebar for sender */}
+        {showSender && (
+          <div class="roomSideCompact senderSideMobile">
+            <span class="muted small">{roleLabel}</span>
+            <span class="sideDot"></span>
+            <span class="muted small">{t.room.peersLabel} {peersLabel}</span>
+          </div>
+        )}
+        {/* Receiver sidebar */}
+        {showReceiver && (
+          <div class="roomSideCompact">
+            <span class="muted small">{roleLabel}</span>
+            <span class="sideDot"></span>
+            <span class="muted small">{t.room.peersLabel} {peersLabel}</span>
           </div>
         )}
 

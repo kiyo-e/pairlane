@@ -879,6 +879,109 @@ input[type="checkbox"] {
   justify-content: center;
 }
 
+/* ===== Sender Mode: Mobile/Desktop Toggle ===== */
+
+/* Desktop: show full layout, hide mobile elements */
+.senderHeaderMobile,
+.senderSideMobile {
+  display: none;
+}
+
+.senderHeaderDesktop,
+.senderSideDesktop {
+  display: flex;
+}
+
+.senderSideDesktop {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Sender mobile layout */
+.senderMode .roomGrid {
+  grid-template-columns: 280px 1fr;
+}
+
+/* Small button style */
+.btnSmall {
+  padding: 8px 12px;
+  font-size: 10px;
+}
+
+/* Mobile: sender compact layout */
+@media (max-width: 600px) {
+  /* Hide desktop elements, show mobile elements */
+  .senderHeaderDesktop,
+  .senderSideDesktop {
+    display: none !important;
+  }
+
+  .senderHeaderMobile,
+  .senderSideMobile {
+    display: flex !important;
+  }
+
+  /* Sender uses single column on mobile */
+  .senderMode .roomGrid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Sender step guide: compact on mobile */
+  .senderMode .stepGuide {
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+
+  .senderMode .stepGuide .stepMain {
+    font-size: 24px;
+  }
+
+  .senderMode .stepGuide .stepSub {
+    font-size: 11px;
+    margin-top: 4px;
+  }
+
+  .senderMode .stepGuide .stepProgress {
+    margin-bottom: 8px;
+  }
+
+  .senderMode .stepGuide .stepLabel {
+    margin-bottom: 4px;
+  }
+
+  /* Drop zone: mobile optimized */
+  .senderMode .drop {
+    padding: 24px 16px;
+  }
+
+  .senderMode .dropTitle {
+    font-size: 18px;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .senderMode .drop .btn {
+    width: 100%;
+    justify-content: center;
+    padding: 16px;
+  }
+
+  /* Room main padding */
+  .senderMode .roomMain {
+    padding: 16px;
+  }
+
+  /* Send button row */
+  .senderMode .row.gap.wrap {
+    flex-direction: column;
+  }
+
+  .senderMode .row.gap.wrap .btn.primary {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
 /* Mobile receiver: even more compact */
 @media (max-width: 600px) {
   .roomHeader.compact {
@@ -895,7 +998,7 @@ input[type="checkbox"] {
   }
 
   .stepGuide.receiverGuide .stepMain {
-    font-size: 28px;
+    font-size: 22px;
   }
 
   .stepGuide.receiverGuide .stepSub {
