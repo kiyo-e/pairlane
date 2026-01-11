@@ -2,7 +2,7 @@
 
 [English](./README.md) | [中文](./README.zh.md)
 
-**デモサイト: https://share-files.karakuri-maker.com/**
+**デモサイト: https://getpairlane.com/**
 
 WebRTCを使ったP2Pファイル共有ツール。サーバーを経由せずブラウザ間で直接ファイルを転送します。
 
@@ -60,7 +60,7 @@ cargo run --release -- receive <ROOM_ID_OR_URL> --output-dir ./downloads
 
 ```sh
 npx pairlane send /path/to/file
-npx pairlane receive "https://share-files.karakuri-maker.com/r/ROOM#k=..."
+npx pairlane receive "https://getpairlane.com/r/ROOM#k=..."
 ```
 
 暗号化を無効にする場合は `--no-encrypt` を指定してください。
@@ -78,7 +78,7 @@ npx pairlane receive <ROOM_ID> --key <BASE64URL_KEY> --output-dir ./downloads
 デフォルトではデモ環境へ接続します。`PAIRLANE_ENDPOINT` 環境変数で上書きできます（旧 `SHARE_FILES_ENDPOINT` も利用可）。
 
 ```sh
-PAIRLANE_ENDPOINT=https://share-files.karakuri-maker.com \
+PAIRLANE_ENDPOINT=https://getpairlane.com \
   npx pairlane send /path/to/file
 ```
 

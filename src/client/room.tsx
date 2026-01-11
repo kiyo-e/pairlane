@@ -1010,7 +1010,7 @@ function formatBytes(n: number) {
 }
 
 function getClientId() {
-  const key = "share-files-client-id";
+  const key = "pairlane-client-id";
   const stored = localStorage.getItem(key);
   if (stored) return stored;
   const id = crypto.randomUUID();

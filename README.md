@@ -2,7 +2,7 @@
 
 [日本語](./README.ja.md) | [中文](./README.zh.md)
 
-**Live Demo: https://share-files.karakuri-maker.com/**
+**Live Demo: https://getpairlane.com/**
 
 A P2P file sharing tool using WebRTC. Transfer files directly between browsers without going through a server.
 
@@ -60,7 +60,7 @@ Encrypted transfers are enabled by default for `send`. The command prints a room
 
 ```sh
 npx pairlane send /path/to/file
-npx pairlane receive "https://share-files.karakuri-maker.com/r/ROOM#k=..."
+npx pairlane receive "https://getpairlane.com/r/ROOM#k=..."
 ```
 
 To disable encryption for `send`, pass `--no-encrypt`.
@@ -78,7 +78,7 @@ Note: URLs with `#k=...` should be quoted in the shell. Legacy flags `--file` an
 By default it connects to the demo endpoint. Override it with the `PAIRLANE_ENDPOINT` environment variable (legacy `SHARE_FILES_ENDPOINT` also supported):
 
 ```sh
-PAIRLANE_ENDPOINT=https://share-files.karakuri-maker.com \
+PAIRLANE_ENDPOINT=https://getpairlane.com \
   npx pairlane send /path/to/file
 ```
 
