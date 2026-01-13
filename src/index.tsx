@@ -15,6 +15,7 @@ app.use("*", jsxRenderer());
 
 const DEFAULT_MAX_CONCURRENT = 3;
 const MAX_MAX_CONCURRENT = 10;
+const LANG_COOKIE = "lang";
 
 function normalizeMaxConcurrent(value?: number) {
   const base = Number.isFinite(value) ? Math.floor(value!) : DEFAULT_MAX_CONCURRENT;
@@ -32,24 +33,48 @@ app.use("/api/rooms", async (c, next) => {
   return next();
 });
 
-function getLocaleFromRequest(c: { req: { header: (name: string) => string | undefined; query: (name: string) => string | undefined } }): Locale {
+function getLocaleFromRequest(c: { req: { header: (name: string) => string | undefined; query: (name: string) => string | undefined } }): { locale: Locale; source: "query" | "cookie" | "accept" } {
   // Check query parameter first (for language switcher)
   const queryLang = c.req.query("lang");
   if (queryLang && supportedLocales.includes(queryLang as Locale)) {
-    return queryLang as Locale;
+    return { locale: queryLang as Locale, source: "query" };
   }
+
+  const cookieLang = getLocaleFromCookie(c.req.header("Cookie"));
+  if (cookieLang) return { locale: cookieLang, source: "cookie" };
+
   // Fall back to Accept-Language header
-  return detectLocale(c.req.header("Accept-Language"));
+  return { locale: detectLocale(c.req.header("Accept-Language")), source: "accept" };
+}
+
+function getLocaleFromCookie(cookieHeader?: string): Locale | null {
+  if (!cookieHeader) return null;
+  const parts = cookieHeader.split(";");
+  for (const part of parts) {
+    const [name, ...valueParts] = part.trim().split("=");
+    if (name !== LANG_COOKIE) continue;
+    const value = valueParts.join("=");
+    if (supportedLocales.includes(value as Locale)) {
+      return value as Locale;
+    }
+  }
+  return null;
+}
+
+function persistLocaleCookie(c: { header: (name: string, value: string) => void }, locale: Locale) {
+  c.header("Set-Cookie", `${LANG_COOKIE}=${locale}; Path=/; Max-Age=31536000; SameSite=Lax`);
 }
 
 app.get("/", (c) => {
-  const locale = getLocaleFromRequest(c);
+  const { locale, source } = getLocaleFromRequest(c);
+  if (source === "query") persistLocaleCookie(c, locale);
   const t = getTranslations(locale);
   return c.render(<TopPage t={t} locale={locale} />);
 });
 
 app.get("/r/:roomId", async (c) => {
-  const locale = getLocaleFromRequest(c);
+  const { locale, source } = getLocaleFromRequest(c);
+  if (source === "query") persistLocaleCookie(c, locale);
   const t = getTranslations(locale);
   const roomId = c.req.param("roomId");
   const id = c.env.ROOM.idFromName(roomId);
