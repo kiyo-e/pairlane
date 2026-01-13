@@ -30,23 +30,54 @@ WebRTCを使ったP2Pファイル共有ツール。サーバーを経由せず�
 - [Vite](https://vite.dev/) - SSR対応ビルドツール
 - WebRTC - P2Pデータ転送
 
-## CLI (Rust)
+## CLI
 
-`cli/` ディレクトリに Rust 製のCLIを用意しています。ブラウザ⇄ターミナル、ターミナル⇄ターミナルの転送に対応します。
+ターミナルから直接ファイルを送受信できます。ブラウザや他のターミナルとの転送に対応。
+
+### クイックスタート
+
+```sh
+# ファイルを送信
+npx pairlane send /path/to/file
+
+# ファイルを受信
+npx pairlane receive <ROOM_ID_OR_URL> --output-dir ./downloads
+```
+
+### 暗号化
+
+暗号化はデフォルトで有効です。`send` コマンドは `#k=...` 付きのURLを出力するので、それを共有してください：
+
+```sh
+npx pairlane send /path/to/file
+# → 出力されたURLを共有: https://getpairlane.com/r/<ROOM_ID>#k=<KEY>
+
+npx pairlane receive "https://getpairlane.com/r/<ROOM_ID>#k=<KEY>"
+```
+
+暗号化を無効にするには `--no-encrypt` を指定します。
+
+### オプション
+
+| オプション | 説明 |
+|-----------|------|
+| `--output-dir` | 受信ファイルの保存先ディレクトリ |
+| `--key <KEY>` | 復号鍵を明示的に指定（base64url） |
+| `--stay-open` | 転送後も継続して待機 |
+| `--no-encrypt` | 送信時の暗号化を無効化 |
+
+### カスタムエンドポイント
+
+デフォルトでは `https://getpairlane.com` に接続します。変更するには：
+
+```sh
+PAIRLANE_ENDPOINT=https://your-server.com npx pairlane send /path/to/file
+```
 
 ### 対応プラットフォーム
 
 - **Linux** (x86_64)
 - **macOS** (Intel / Apple Silicon)
-
-GitHub Actionsにより、`cli/` ディレクトリへのpush/PR時にビルドが自動テストされます。
-
-### npxで実行
-
-```sh
-npx pairlane send /path/to/file
-npx pairlane receive <ROOM_ID_OR_URL> --output-dir ./downloads
-```
 
 ### ソースからビルド
 
@@ -55,34 +86,6 @@ cd cli
 cargo run --release -- send /path/to/file
 cargo run --release -- receive <ROOM_ID_OR_URL> --output-dir ./downloads
 ```
-
-暗号化は `send` のデフォルトです。`send` が出力する `#k=...` 付きのURLを、そのまま `receive` に渡せます。
-
-```sh
-npx pairlane send /path/to/file
-npx pairlane receive "https://getpairlane.com/r/<ROOM_ID>#k=<BASE64URL_KEY>"
-```
-
-暗号化を無効にする場合は `--no-encrypt` を指定してください。
-
-復号鍵を明示したい場合は `receive` に `--key`（base64url）を渡します。
-
-```sh
-npx pairlane receive <ROOM_ID> --key <BASE64URL_KEY> --output-dir ./downloads
-```
-
-デフォルトでは、`send` と `receive` は転送成功後に終了します。継続して待ちたい場合は `--stay-open` を指定してください。
-
-※ `#k=...` を含むURLはシェルでクォートしてください。従来の `--file` / `--room-id` も引き続き利用できます。
-
-デフォルトではデモ環境へ接続します。`PAIRLANE_ENDPOINT` 環境変数で上書きできます（旧 `SHARE_FILES_ENDPOINT` も利用可）。
-
-```sh
-PAIRLANE_ENDPOINT=https://getpairlane.com \
-  npx pairlane send /path/to/file
-```
-
-既存ルームに参加したい場合は `--room-id` を明示指定してください。
 
 ## 必要環境
 

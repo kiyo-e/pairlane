@@ -30,23 +30,54 @@
 - [Vite](https://vite.dev/) - 支持SSR的构建工具
 - WebRTC - P2P数据传输
 
-## CLI (Rust)
+## CLI
 
-`cli/` 目录包含一个Rust编写的CLI工具，使用相同的WebRTC信令流程发送和接收文件，支持浏览器⇄终端和终端⇄终端的传输。
+直接从终端发送和接收文件。支持与浏览器和其他终端之间的传输。
+
+### 快速开始
+
+```sh
+# 发送文件
+npx pairlane send /path/to/file
+
+# 接收文件
+npx pairlane receive <ROOM_ID_OR_URL> --output-dir ./downloads
+```
+
+### 加密
+
+加密默认启用。`send` 命令会输出带有 `#k=...` 的URL，可以直接分享：
+
+```sh
+npx pairlane send /path/to/file
+# → 分享输出的URL: https://getpairlane.com/r/<ROOM_ID>#k=<KEY>
+
+npx pairlane receive "https://getpairlane.com/r/<ROOM_ID>#k=<KEY>"
+```
+
+要禁用加密，请使用 `--no-encrypt`。
+
+### 选项
+
+| 选项 | 说明 |
+|------|------|
+| `--output-dir` | 接收文件的保存目录 |
+| `--key <KEY>` | 显式指定解密密钥（base64url） |
+| `--stay-open` | 传输后保持运行以进行更多传输 |
+| `--no-encrypt` | 禁用发送时的加密 |
+
+### 自定义端点
+
+默认连接到 `https://getpairlane.com`。可通过环境变量覆盖：
+
+```sh
+PAIRLANE_ENDPOINT=https://your-server.com npx pairlane send /path/to/file
+```
 
 ### 支持的平台
 
 - **Linux** (x86_64)
 - **macOS** (Intel / Apple Silicon)
-
-通过GitHub Actions，在向 `cli/` 目录push/PR时自动测试构建。
-
-### npx快速开始
-
-```sh
-npx pairlane send /path/to/file
-npx pairlane receive <ROOM_ID_OR_URL> --output-dir ./downloads
-```
 
 ### 从源码构建
 
@@ -55,34 +86,6 @@ cd cli
 cargo run --release -- send /path/to/file
 cargo run --release -- receive <ROOM_ID_OR_URL> --output-dir ./downloads
 ```
-
-`send` 默认启用加密。`send` 输出的带有 `#k=...` 的URL可以直接传给 `receive`：
-
-```sh
-npx pairlane send /path/to/file
-npx pairlane receive "https://getpairlane.com/r/<ROOM_ID>#k=<BASE64URL_KEY>"
-```
-
-要禁用加密，请使用 `--no-encrypt`。
-
-如需显式指定解密密钥，请向 `receive` 传递 `--key`（base64url编码）：
-
-```sh
-npx pairlane receive <ROOM_ID> --key <BASE64URL_KEY> --output-dir ./downloads
-```
-
-默认情况下，`send` 和 `receive` 在传输成功后会退出。如需保持运行以进行更多传输，请使用 `--stay-open`。
-
-※ 包含 `#k=...` 的URL在shell中需要用引号包裹。传统的 `--file` / `--room-id` 参数仍然可用。
-
-默认连接到演示环境。可通过 `PAIRLANE_ENDPOINT` 环境变量覆盖（旧 `SHARE_FILES_ENDPOINT` 也可用）：
-
-```sh
-PAIRLANE_ENDPOINT=https://getpairlane.com \
-  npx pairlane send /path/to/file
-```
-
-如需加入现有房间，请显式指定 `--room-id`。
 
 ## 环境要求
 
