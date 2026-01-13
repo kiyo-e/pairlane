@@ -99,6 +99,9 @@ export function RoomPage({ roomId, maxConcurrent, t, locale }: RoomPageProps) {
             </div>
           </div>
         </div>
+
+        <div class="foot muted">{t.home.footer}</div>
+
       </section>
     </Layout>
   );

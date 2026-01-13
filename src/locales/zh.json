@@ -4,7 +4,7 @@
   "title": "PAIRLANE",
   "header": {
     "brand": "PAIR—LANE",
-    "sub": "P2P / 1:1 / WEBRTC"
+    "sub": "P2P / 1:N / WEBRTC"
   },
   "home": {
     "eyebrow": "DIRECT—PRIVATE—INSTANT",

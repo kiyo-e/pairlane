@@ -935,6 +935,7 @@ function RoomApp({ roomId, maxConcurrent }: RoomAppProps) {
         </div>
       </div>
       <div class={`toast${toastVisible ? " show" : ""}`}>{t.room.copied}</div>
+      <div class="foot muted">{t.home.footer}</div>
     </section>
   );
 }

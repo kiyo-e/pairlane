@@ -65,7 +65,6 @@ export function TopPage({ t, locale }: TopPageProps) {
           </div>
         </div>
 
-        <div class="foot muted">{t.home.footer}</div>
       </section>
     </Layout>
   );
