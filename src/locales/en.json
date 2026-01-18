@@ -22,7 +22,9 @@
     "codePlaceholder": "Enter code (e.g. ABCD...)",
     "join": "Join",
     "encryptHint": "With encryption ON, the key is included in the link.",
-    "footer": "P2P only. Connection may fail depending on network conditions"
+    "footer": "P2P only. Connection may fail depending on network conditions",
+    "githubText": "GitHub",
+    "githubUrl": "https://github.com/kiyo-e/pairlane"
   },
   "room": {
     "eyebrow": "ROOM—SESSION",

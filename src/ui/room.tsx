@@ -102,7 +102,9 @@ export function RoomPage({ roomId, maxConcurrent, t, locale, url }: RoomPageProp
           </div>
         </div>
 
-        <div class="foot muted">{t.home.footer}</div>
+        <div class="foot muted">
+          {t.home.footer} · <a href={t.home.githubUrl} target="_blank" rel="noopener noreferrer">{t.home.githubText}</a>
+        </div>
 
       </section>
     </Layout>

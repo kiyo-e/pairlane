@@ -22,7 +22,9 @@
     "codePlaceholder": "コード入力（例: ABCD...）",
     "join": "参加",
     "encryptHint": "暗号化ONならリンクに鍵が含まれます。",
-    "footer": "P2Pのみ。ネットワーク条件によっては接続不可"
+    "footer": "P2Pのみ。ネットワーク条件によっては接続不可",
+    "githubText": "GitHub",
+    "githubUrl": "https://github.com/kiyo-e/pairlane"
   },
   "room": {
     "eyebrow": "ROOM—SESSION",

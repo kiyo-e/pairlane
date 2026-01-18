@@ -22,7 +22,9 @@
     "codePlaceholder": "输入代码（例如: ABCD...）",
     "join": "加入",
     "encryptHint": "开启加密后，密钥包含在链接中。",
-    "footer": "仅P2P。网络条件可能导致连接失败"
+    "footer": "仅P2P。网络条件可能导致连接失败",
+    "githubText": "GitHub",
+    "githubUrl": "https://github.com/kiyo-e/pairlane"
   },
   "room": {
     "eyebrow": "ROOM—SESSION",
