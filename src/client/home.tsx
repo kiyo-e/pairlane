@@ -6,6 +6,7 @@
 
 import { render, useCallback, useState } from "hono/jsx/dom";
 import { getT } from "../i18n/client";
+import { Footer } from "./components/Footer";
 
 const creatorCid = getClientId();
 const t = getT();
@@ -20,6 +21,7 @@ function HomeApp() {
   const [busy, setBusy] = useState(false);
   const [joinCode, setJoinCode] = useState("");
   const [maxConcurrent, setMaxConcurrent] = useState(3);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const handleEncryptToggle = useCallback((ev: Event) => {
     const target = ev.currentTarget as HTMLInputElement;
@@ -37,6 +39,10 @@ function HomeApp() {
     if (Number.isFinite(next)) {
       setMaxConcurrent(Math.max(1, Math.min(10, next)));
     }
+  }, []);
+
+  const toggleAdvanced = useCallback(() => {
+    setShowAdvanced((prev) => !prev);
   }, []);
 
   const handleCreate = useCallback(async () => {
@@ -88,9 +94,11 @@ function HomeApp() {
         </div>
 
         <div class="homePanel">
-          <div class="panelBlock">
-            <div class="panelTitle">{t.home.sendTitle}</div>
-            <label class="toggle">
+          <div class="panelBlock ctaBlock">
+            <button id="createBtn" class="btn cta" disabled={busy} onClick={handleCreate}>
+              {t.home.createRoom}
+            </button>
+            <label class="encryptBadge">
               <input
                 id="encryptToggle"
                 type="checkbox"
@@ -100,45 +108,46 @@ function HomeApp() {
               />
               <span>{t.home.encryptOn}</span>
             </label>
-            <label class="row gap">
-              <span class="muted small">{t.home.maxConcurrent}</span>
-              <input
-                id="maxConcurrent"
-                class="input"
-                type="number"
-                min="1"
-                max="10"
-                value={String(maxConcurrent)}
-                disabled={busy}
-                onInput={handleMaxConcurrentInput}
-              />
-            </label>
-            <button id="createBtn" class="btn primary" disabled={busy} onClick={handleCreate}>
-              {t.home.createRoom}
+            <button type="button" class="advancedToggle" onClick={toggleAdvanced}>
+              <span class={`advancedArrow${showAdvanced ? " open" : ""}`}>▸</span>
+              {t.home.advancedOptions}
             </button>
+            {showAdvanced && (
+              <div class="advancedPanel">
+                <label class="row gap">
+                  <span class="muted small">{t.home.maxConcurrent}</span>
+                  <input
+                    id="maxConcurrent"
+                    class="input inputSmall"
+                    type="number"
+                    min="1"
+                    max="10"
+                    value={String(maxConcurrent)}
+                    disabled={busy}
+                    onInput={handleMaxConcurrentInput}
+                  />
+                </label>
+              </div>
+            )}
           </div>
 
-          <hr class="sep" />
-
-          <div class="panelBlock">
-            <div class="panelTitle">{t.home.receiveTitle}</div>
-            <div class="row gap wrap">
-              <input
-                id="joinCode"
-                class="input"
-                placeholder={t.home.codePlaceholder}
-                value={joinCode}
-                disabled={busy}
-                onInput={handleJoinInput}
-              />
-              <button id="joinBtn" class="btn" disabled={busy} onClick={handleJoin}>
-                {t.home.join}
-              </button>
-            </div>
-            <p class="muted small">{t.home.encryptHint}</p>
+          <div class="joinRow">
+            <span class="muted small">{t.home.haveCode}</span>
+            <input
+              id="joinCode"
+              class="input inputSmall"
+              placeholder={t.home.codePlaceholder}
+              value={joinCode}
+              disabled={busy}
+              onInput={handleJoinInput}
+            />
+            <button id="joinBtn" class="btn btnSmall" disabled={busy} onClick={handleJoin}>
+              {t.home.join}
+            </button>
           </div>
         </div>
       </div>
+      <Footer />
     </section>
   );
 }

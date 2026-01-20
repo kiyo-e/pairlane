@@ -372,6 +372,103 @@ input[type="checkbox"] {
   text-transform: uppercase;
 }
 
+/* CTA Block */
+.ctaBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.btn.cta {
+  width: 100%;
+  padding: 20px 32px;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  background: var(--red);
+  color: var(--white);
+  border-color: var(--red);
+  justify-content: center;
+}
+
+.btn.cta:hover {
+  background: var(--black);
+  border-color: var(--black);
+  box-shadow: 4px 4px 0 var(--red);
+}
+
+.encryptBadge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--gray);
+  cursor: pointer;
+}
+
+.encryptBadge input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
+
+.advancedToggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 8px 0;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--gray);
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.advancedToggle:hover {
+  color: var(--black);
+}
+
+.advancedArrow {
+  display: inline-block;
+  transition: transform 0.15s ease;
+}
+
+.advancedArrow.open {
+  transform: rotate(90deg);
+}
+
+.advancedPanel {
+  padding: 16px;
+  border: 2px solid var(--black);
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.inputSmall {
+  flex: none;
+  min-width: 80px;
+  width: 80px;
+  padding: 10px 12px;
+}
+
+/* Compact Join Row */
+.joinRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 0;
+  margin-top: 24px;
+  border-top: 2px solid var(--black);
+}
+
+.joinRow .input {
+  flex: 1;
+  min-width: 100px;
+}
+
 .roomHeader {
   display: flex;
   justify-content: space-between;
@@ -663,6 +760,56 @@ input[type="checkbox"] {
   padding: 24px 48px;
   border-top: var(--border-thick);
   font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.footText {
+  flex: 1;
+}
+
+.footIcons {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.footIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  color: var(--gray);
+  border: 2px solid var(--black);
+  transition: all 0.15s ease;
+}
+
+.footIcon:hover {
+  color: var(--white);
+  background: var(--black);
+  transform: translate(-2px, -2px);
+  box-shadow: 2px 2px 0 var(--black);
+}
+
+.footIcon:active {
+  transform: translate(0, 0);
+  box-shadow: none;
+}
+
+@media (max-width: 600px) {
+  .foot {
+    padding: 16px;
+    flex-direction: column;
+    text-align: center;
+    gap: 12px;
+  }
+
+  .footText {
+    flex: none;
+  }
 }
 
 #downloadArea {
