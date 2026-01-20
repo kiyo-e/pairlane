@@ -18,11 +18,14 @@
     "encryptOn": "E2E加密 开启",
     "maxConcurrent": "最大并发数 (1-10)",
     "createRoom": "创建房间",
-    "receiveTitle": "加入接收",
-    "codePlaceholder": "输入代码（例如: ABCD...）",
+    "advancedOptions": "高级选项",
+    "haveCode": "有代码？",
+    "codePlaceholder": "ABCD...",
     "join": "加入",
     "encryptHint": "开启加密后，密钥包含在链接中。",
-    "footer": "仅P2P。网络条件可能导致连接失败"
+    "footer": "仅P2P。网络条件可能导致连接失败",
+    "githubText": "GitHub",
+    "githubUrl": "https://github.com/kiyo-e/pairlane"
   },
   "room": {
     "eyebrow": "ROOM—SESSION",

@@ -6,6 +6,7 @@
 
 import { render, useCallback, useEffect, useMemo, useRef, useState } from "hono/jsx/dom";
 import { getT } from "../i18n/client";
+import { Footer } from "./components/Footer";
 
 type RoomRole = "offerer" | "answerer" | null;
 
@@ -935,7 +936,7 @@ function RoomApp({ roomId, maxConcurrent }: RoomAppProps) {
         </div>
       </div>
       <div class={`toast${toastVisible ? " show" : ""}`}>{t.room.copied}</div>
-      <div class="foot muted">{t.home.footer}</div>
+      <Footer />
     </section>
   );
 }
