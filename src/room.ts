@@ -44,13 +44,6 @@ function toText(message: ArrayBuffer | string) {
   return typeof message === "string" ? message : new TextDecoder().decode(message);
 }
 
-/** タイムスタンプ付きログ */
-function log(...args: unknown[]) {
-  const now = new Date();
-  const ts = now.toISOString().slice(11, 23); // HH:mm:ss.SSS
-  console.info(`[${ts}]`, ...args);
-}
-
 type Bindings = CloudflareBindings;
 
 const DurableObjectBase =
@@ -103,11 +96,8 @@ export class Room extends DurableObjectBase {
 
     const clientId = url.searchParams.get("cid") ?? crypto.randomUUID();
 
-    log("[room] new connection, cid:", clientId, "current sockets:", this.ctx.getWebSockets().length);
     this.closeDuplicateClient(clientId);
-    log("[room] after closeDuplicate, sockets:", this.ctx.getWebSockets().length);
     const role = this.pickRole(clientId);
-    log("[room] assigned role:", role, "to cid:", clientId);
 
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
@@ -189,7 +179,6 @@ export class Room extends DurableObjectBase {
 
   webSocketClose(ws: WebSocket) {
     const attachment = ws.deserializeAttachment() as SocketAttachment | null;
-    log("[room] webSocketClose, cid:", attachment?.cid, "role:", attachment?.role);
 
     if (attachment?.role === "answerer") {
       const hasReplacement = attachment.cid && this.hasOpenSocket(attachment.cid, "answerer");
@@ -335,7 +324,6 @@ export class Room extends DurableObjectBase {
       if (keepSocket && socket === keepSocket) continue;
       const attachment = socket.deserializeAttachment() as SocketAttachment | null;
       if (attachment?.cid === clientId) {
-        log("[room] closing duplicate client, cid:", clientId, "role:", attachment.role);
         if (socket.readyState === WebSocket.OPEN) {
           socket.close(1000, "replaced");
         }

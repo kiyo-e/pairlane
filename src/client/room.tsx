@@ -224,7 +224,6 @@ function RoomApp({ roomId, maxConcurrent }: RoomAppProps) {
       mime: file.type || "application/octet-stream",
       encrypted,
     };
-    log("[send] starting:", meta.name, "size:", meta.size, "peer:", peer.peerId);
     dc.send(JSON.stringify(meta));
 
     setStatus(t.status.sending);
@@ -264,7 +263,6 @@ function RoomApp({ roomId, maxConcurrent }: RoomAppProps) {
     }
 
     dc.send(JSON.stringify({ type: "done" } satisfies DoneMessage));
-    log("[send] completed, peer:", peer.peerId);
     setStatus(t.status.sendComplete);
     peer.sent = true;
 
@@ -281,7 +279,6 @@ function RoomApp({ roomId, maxConcurrent }: RoomAppProps) {
     const dc = peer.dc;
     if (!dc || dc.readyState !== "open") return;
 
-    log("[send] triggered:", reason, "peer:", peer.peerId);
     peer.sending = true;
     await sendFileToPeer(peer, file);
     peer.sending = false;
@@ -312,15 +309,14 @@ function RoomApp({ roomId, maxConcurrent }: RoomAppProps) {
       const wireOffererDataChannel = (peer: OffererPeer, ch: DataChannel) => {
         ch.binaryType = "arraybuffer";
         ch.onopen = () => {
-          log("[rtc] datachannel open (peer:", peer.peerId + ")");
           setStatus(t.status.dataChannelReady);
           void trySendPeer(peer, "datachannel-open");
         };
         ch.onclose = () => {
-          log("[rtc] datachannel close (peer:", peer.peerId + ")");
+          // Data channel closed
         };
         ch.onerror = () => {
-          console.warn("[rtc] datachannel error (peer:", peer.peerId + ")");
+          // Data channel error
         };
       };
 
@@ -359,7 +355,7 @@ function RoomApp({ roomId, maxConcurrent }: RoomAppProps) {
         };
 
         pc.onconnectionstatechange = () => {
-          log("[rtc] connectionState:", pc.connectionState, "(peer:", peer.peerId + ")");
+          // Connection state changed
         };
 
         const dc = pc.createDataChannel("file", { ordered: true });
@@ -411,15 +407,12 @@ function RoomApp({ roomId, maxConcurrent }: RoomAppProps) {
       const wireReceiverDataChannel = (ch: DataChannel) => {
         ch.binaryType = "arraybuffer";
         ch.onopen = () => {
-          log("[rtc] datachannel open (receiver)");
           setStatus(t.status.dataChannelReady);
         };
         ch.onclose = () => {
-          log("[rtc] datachannel close (receiver)");
           setStatus(t.status.dataChannelClosed);
         };
         ch.onerror = () => {
-          console.warn("[rtc] datachannel error (receiver)");
           setStatus(t.status.dataChannelError);
         };
 
@@ -429,7 +422,6 @@ function RoomApp({ roomId, maxConcurrent }: RoomAppProps) {
             if (!m) return;
 
             if (m.type === "meta") {
-              log("[recv] starting:", m.name, "size:", m.size);
               incomingMetaRef.current = m;
               recvChunksRef.current = [];
               recvBytesRef.current = 0;
@@ -444,7 +436,6 @@ function RoomApp({ roomId, maxConcurrent }: RoomAppProps) {
             }
 
             if (m.type === "done") {
-              log("[recv] completed");
               await finalizeDownload();
             }
             return;
@@ -488,7 +479,7 @@ function RoomApp({ roomId, maxConcurrent }: RoomAppProps) {
         };
 
         pc.onconnectionstatechange = () => {
-          log("[rtc] connectionState:", pc.connectionState, "(receiver)");
+          // Connection state changed
         };
 
         pc.ondatachannel = (ev) => {
@@ -520,7 +511,6 @@ function RoomApp({ roomId, maxConcurrent }: RoomAppProps) {
       ws.onmessage = async (ev) => {
         const msg = safeJson(ev.data) as RoomMessage | null;
         if (!msg) return;
-        log("[ws] message:", msg.type, "(role:", roleRef.current + ")");
 
         if (msg.type === "role") {
           roleRef.current = msg.role;
@@ -633,7 +623,9 @@ function RoomApp({ roomId, maxConcurrent }: RoomAppProps) {
       };
 
       ws.onclose = () => setStatus(t.status.disconnected);
-      ws.onerror = () => console.warn("[ws] error");
+      ws.onerror = () => {
+        // WebSocket error
+      };
     };
 
     boot().catch((e) => {
@@ -967,13 +959,6 @@ function safeJson(text: string) {
   } catch {
     return null;
   }
-}
-
-/** タイムスタンプ付きログ */
-function log(...args: unknown[]) {
-  const now = new Date();
-  const ts = now.toISOString().slice(11, 23); // HH:mm:ss.SSS
-  console.info(`[${ts}]`, ...args);
 }
 
 /** ---------- UI helpers ---------- */
