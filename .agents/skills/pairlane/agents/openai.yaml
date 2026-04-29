@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pairlane"
+  short_description: "Run Pairlane file transfers with npx"
+  default_prompt: "Use $pairlane to send or receive files with npx pairlane."
